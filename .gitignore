@@ -1,27 +1,7 @@
-# Ignore build and output directories
-Debug/
-Release/
-build/
-
-# Ignore generated binaries
-*.bin
-*.hex
 *.elf
-*.map
-*.list
-*.o
-*.d
-*.a
-
-# Ignore CubeMX-generated files
-*.mxproject
-*.mxconfig
-
-# Ignore IDE settings and logs
-*.log
-*.swp
-*.swo
-*.swd
-*.launch
-*.dep
-*.mk
+Debug/CS25.elf
+Debug/*.elf
+.settings/language.settings.xml
+.gitignore
+.project
+CanSat2025_FSW_RTOS.zip

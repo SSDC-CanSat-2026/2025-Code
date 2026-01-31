@@ -1,0 +1,11 @@
+../Core/Src/commands.c:19:13:get_current_token	32	static
+../Core/Src/commands.c:37:16:verify_time_format	32	static
+../Core/Src/commands.c:77:19:verify_cmd_header	16	static
+../Core/Src/commands.c:84:19:perform_CX	24	static
+../Core/Src/commands.c:101:19:perform_ST	32	static
+../Core/Src/commands.c:121:19:perform_SIM	32	static
+../Core/Src/commands.c:143:19:perform_SIMP	32	static
+../Core/Src/commands.c:167:19:perform_MEC	32	static
+../Core/Src/commands.c:184:12:process_command	32	static
+../Core/Src/commands.c:229:13:test_cmd_header	88	static
+../Core/Src/commands.c:264:6:run_command_test_cases	8	static

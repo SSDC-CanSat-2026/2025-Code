@@ -1,0 +1,5 @@
+../Drivers/LC76G/LC76G.c:9:6:LC76G_init	8	static
+../Drivers/LC76G/LC76G.c:42:16:LC76G_read_data	296	static
+../Drivers/LC76G/LC76G.c:187:6:LC76G_get_array	24	static
+../Drivers/LC76G/LC76G.c:191:8:convert_to_double	32	static
+../Drivers/LC76G/LC76G.c:202:9:convert_to_integer	32	static

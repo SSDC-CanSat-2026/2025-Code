@@ -16,11 +16,6 @@
   *
   ******************************************************************************
   */
-
-#ifndef _TRACE
-#define _TRACE
-#endif
-
 /* USER CODE END Header */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
@@ -33,18 +28,6 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32g4xx_hal.h"
-
-#include "stm32g4xx_ll_ucpd.h"
-#include "stm32g4xx_ll_bus.h"
-#include "stm32g4xx_ll_cortex.h"
-#include "stm32g4xx_ll_rcc.h"
-#include "stm32g4xx_ll_system.h"
-#include "stm32g4xx_ll_utils.h"
-#include "stm32g4xx_ll_pwr.h"
-#include "stm32g4xx_ll_gpio.h"
-#include "stm32g4xx_ll_dma.h"
-
-#include "stm32g4xx_ll_exti.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -76,10 +59,6 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define T4_PRE 7199
-#define T4_CNT 9999
-#define PWM_1 4999
-#define CONST 1
 #define STAT_BKUP_Pin GPIO_PIN_13
 #define STAT_BKUP_GPIO_Port GPIOC
 #define OSC32_IN_Pin GPIO_PIN_14
