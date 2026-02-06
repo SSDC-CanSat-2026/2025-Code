@@ -35,7 +35,7 @@ static HAL_StatusTypeDef ICM42688P_write_reg(uint8_t reg, uint8_t data)
 
 int16_t ICM42688P_read_reg(uint8_t reg)
 {
-    uint8_t tx[3] = { reg | 0x80, 0x00, 0x00 }; // 0x80 = read bit
+    uint8_t tx[3] = { reg | 0x80, reg+1 | 0x80, 0x00 }; // 0x80 = read bit
     int8_t rx[3] = {0};
     ICM42688P_disable_chip_select();
     HAL_SPI_TransmitReceive(hspi, &tx, &rx, 3, HAL_MAX_DELAY);
@@ -97,9 +97,9 @@ ICM42688P_AccelData ICM42688P_read_data()
 
     uint32_t time = 0;
 
-    data.accel_p = Get_Accel_P(data.gyro_p, time);
-    data.accel_y = Get_Accel_Y(data.gyro_y, time);
-    data.accel_r = -Get_Accel_R(data.gyro_r, time);
+    data.accel_p = ICM42688P_read_reg(0x1F);
+    data.accel_y = ICM42688P_read_reg(0x21);
+    data.accel_r = ICM42688P_read_reg(0x23);
 
     gyro_old_p = data.gyro_p;
     gyro_old_y = data.gyro_y;

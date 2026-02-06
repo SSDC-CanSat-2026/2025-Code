@@ -232,7 +232,7 @@ int main(void)
 
   /* Create the thread(s) */
   /* definition and creation of readSensors */
-  osThreadDef(readSensors, StartReadSensors, osPriorityAboveNormal, 0, 512);
+  osThreadDef(readSensors, StartReadSensors, osPriorityNormal, 0, 512);
   readSensorsHandle = osThreadCreate(osThread(readSensors), NULL);
 
   /* definition and creation of sendTelemetry */
@@ -1345,21 +1345,21 @@ void StartReadSensors(void const * argument)
   /* init code for USB_Device */
   MX_USB_Device_Init();
   /* USER CODE BEGIN 5 */
-  MS5607Readings bmp_data;      // pressure data
-  ICM42688P_AccelData imu_data; // accelerometer / gyro data
-  BMM150_mag_data mag_data;     // DELETE: magnetometer data (unused)
-  LC76G_gps_data gps_data;      // GPS data
+  volatile MS5607Readings bmp_data;      // pressure data
+  volatile ICM42688P_AccelData imu_data; // accelerometer / gyro data
+  volatile BMM150_mag_data mag_data;     // DELETE: magnetometer data (unused)
+  volatile LC76G_gps_data gps_data;      // GPS data
 
   // Holds the number of quadrature encoder revolutions measured in the
   // previous and current telemetry packet, respectively (used to calculate
   // auto-gyro rotation rate)
-  int16_t prev_enc_count = 0;
-  int16_t enc_count = 0;
+  volatile int16_t prev_enc_count = 0;
+  volatile int16_t enc_count = 0;
 
   osStatus stat = osErrorOS;
 
 
-  uint8_t gps_array_check[83] = {0};
+  volatile uint8_t gps_array_check[83] = {0};
 
   /* Infinite loop */
   for(;;)
@@ -1370,7 +1370,15 @@ void StartReadSensors(void const * argument)
 	  imu_data = ICM42688P_read_data();
 	  // DELETE: broken/unused sensor data
 	  // mag_data = BMM150_read_mag_data(&bmm150);
-//	  gps_data = LC76G_read_data();
+	  gps_data = LC76G_read_data();
+
+	  if (gps_data.time_H) {
+		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+		  osDelay(100);
+		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+		  osDelay(100);
+	  }
+//	  HAL_UART_Transmit(&huart3, gps_data.sats, 3, HAL_MAX_DELAY);
 	  // read quadrature encoder values
 	  enc_count = QENC_Get_Encoder0_Count();
 
@@ -1380,13 +1388,13 @@ void StartReadSensors(void const * argument)
 		  continue;
 	  }
 
-	  uint8_t gps_test_array[30] = {'\0'};
-	  uint8_t *pointer = gps_test_array;
-	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-	  LC76G_get_array(&huart5, &gps_test_array, 1);
-	  HAL_UART_Transmit(&huart3, &gps_test_array, 3, HAL_MAX_DELAY);
-	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
-	  osDelay(1000);
+//	  uint8_t gps_test_array[30] = {'\0'};
+//	  uint8_t *pointer = gps_test_array;
+//	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//	  LC76G_get_array(&huart5, &gps_test_array, 29);
+//	  HAL_UART_Transmit(&huart3, &gps_test_array, 30, HAL_MAX_DELAY);
+//	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+//	  osDelay(1000);
 //	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
 //	  osDelay(2000);
 //	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
@@ -1529,43 +1537,43 @@ void StartSendTelemetry(void const * argument)
 
 
 		// fill the buffer with the first half of the packet
-//		str_len = sprintf(telemetry_string, "%d,%s,%ld,%c,%s,%3.1f,%.1f,%.1f,%.1f,%d,%d,%d",
-//						  global_mission_data.TEAM_ID,      // team id (3174)
-//						  global_mission_data.MISSION_TIME, // mission time
-//						  global_mission_data.PACKET_COUNT, // packet count
-//						  global_mission_data.MODE,         // mode
-//						  global_mission_data.STATE,        // state
-//						  global_mission_data.ALTITUDE,     // calibrated altitude (m)
-//						  global_mission_data.TEMPERATURE,  // temperature (C)
-//						  global_mission_data.PRESSURE,     // pressure (kPa)
-//						  global_mission_data.VOLTAGE,      // battery voltage (V)
-//						  global_mission_data.GYRO_R,       // gyro roll (degrees/s)
-//						  global_mission_data.GYRO_P,       // gyro pitch (degrees/s)
-//						  global_mission_data.GYRO_Y        // gyro yaw (degrees/s)
-//		);
-//		// str_len = sizeof(telemetry_string);
-//		// send the first part of the packet over UART
-//		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
-//		// clear the buffer
-//		memset(telemetry_string, 0, sizeof(telemetry_string));
-//		// fill the buffer with the second half of the packet
-//		str_len = sprintf(telemetry_string, ",%d,%d,%d,%.1f,%.1f,%.1f,%d,%s,%.1f,%.4f,%.4f,%d,%s",
-//						  global_mission_data.ACCEL_R,                 // accelerometer roll (degrees/s^2)
-//						  global_mission_data.ACCEL_P,                 // accelerometer pitch (degrees/s^2)
-//						  global_mission_data.ACCEL_Y,                 // accelerometer yaw (degrees/s^2)
-//						  global_mission_data.MAG_R,                   // magnetometer roll
-//						  global_mission_data.MAG_P,                   // magnetometer pitch
-//						  global_mission_data.MAG_Y,                   // magnetometer yaw
-//						  global_mission_data.AUTO_GYRO_ROTATION_RATE, // auto-gyro rotation rate (rps)
-//						  global_mission_data.GPS_TIME,                // GPS time
-//						  global_mission_data.GPS_ALTITUDE,            // GPS (absolute) altitude (m)
-//						  global_mission_data.GPS_LATITUDE,            // GPS latitude
-//						  global_mission_data.GPS_LONGITUDE,           // GPS longitude
-//						  global_mission_data.GPS_SATS,                // # of connected GPS satellites
-//						  global_mission_data.CMD_ECHO                 // tracks previously received command
-//		);
-//		// send the second half of the packet over UART
-//		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
+		str_len = sprintf(telemetry_string, "%d,%s,%ld,%c,%s,%3.1f,%.1f,%.1f,%.1f,%d,%d,%d",
+						  global_mission_data.TEAM_ID,      // team id (3174)
+						  global_mission_data.MISSION_TIME, // mission time
+						  global_mission_data.PACKET_COUNT, // packet count
+						  global_mission_data.MODE,         // mode
+						  global_mission_data.STATE,        // state
+						  global_mission_data.ALTITUDE,     // calibrated altitude (m)
+						  global_mission_data.TEMPERATURE,  // temperature (C)
+						  global_mission_data.PRESSURE,     // pressure (kPa)
+						  global_mission_data.VOLTAGE,      // battery voltage (V)
+						  global_mission_data.GYRO_R,       // gyro roll (degrees/s)
+						  global_mission_data.GYRO_P,       // gyro pitch (degrees/s)
+						  global_mission_data.GYRO_Y        // gyro yaw (degrees/s)
+		);
+		// str_len = sizeof(telemetry_string);
+		// send the first part of the packet over UART
+		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
+		// clear the buffer
+		memset(telemetry_string, 0, sizeof(telemetry_string));
+		// fill the buffer with the second half of the packet
+		str_len = sprintf(telemetry_string, ",%d,%d,%d,%.1f,%.1f,%.1f,%d,%s,%.1f,%.4f,%.4f,%d,%s",
+						  global_mission_data.ACCEL_R,                 // accelerometer roll (degrees/s^2)
+						  global_mission_data.ACCEL_P,                 // accelerometer pitch (degrees/s^2)
+						  global_mission_data.ACCEL_Y,                 // accelerometer yaw (degrees/s^2)
+						  global_mission_data.MAG_R,                   // magnetometer roll
+						  global_mission_data.MAG_P,                   // magnetometer pitch
+						  global_mission_data.MAG_Y,                   // magnetometer yaw
+						  global_mission_data.AUTO_GYRO_ROTATION_RATE, // auto-gyro rotation rate (rps)
+						  global_mission_data.GPS_TIME,                // GPS time
+						  global_mission_data.GPS_ALTITUDE,            // GPS (absolute) altitude (m)
+						  global_mission_data.GPS_LATITUDE,            // GPS latitude
+						  global_mission_data.GPS_LONGITUDE,           // GPS longitude
+						  global_mission_data.GPS_SATS,                // # of connected GPS satellites
+						  global_mission_data.CMD_ECHO                 // tracks previously received command
+		);
+		// send the second half of the packet over UART
+		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
 
 		/*char test_string[30];
 		str_len = sprintf(test_string, "accel_z: %d", imu_data.accel_z);
@@ -1574,12 +1582,10 @@ void StartSendTelemetry(void const * argument)
 		// increment packet count once the entire packet has been transmitted
 		global_mission_data.PACKET_COUNT = global_mission_data.PACKET_COUNT + 1;
 
-//		osDelay(100);
-//		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
-
-//		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-//		osDelay(100);
-//		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+    // Commented for GPS testing
+		// HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+		// osDelay(100);
+		// HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 
 		osSemaphoreRelease(globalDataHandle);
 
@@ -1609,7 +1615,7 @@ void StartReadCommands(void const * argument)
 {
   /* USER CODE BEGIN StartReadCommands */
 	osStatus stat = osErrorOS;
-	uint8_t update_time = 0;
+	volatile uint8_t update_time = 0;
   /* Infinite loop */
   for(;;)
   {

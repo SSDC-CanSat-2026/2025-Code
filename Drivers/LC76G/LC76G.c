@@ -41,7 +41,7 @@ void LC76G_init()
 
 LC76G_gps_data LC76G_read_data() {
 
-	LC76G_gps_data data = {0,0,0,0,0,0,0};
+	LC76G_gps_data data;
 
 	// The init() sets the GGA message set to be the only one used.
 	// The protocol specification can be found at this link
@@ -73,10 +73,16 @@ LC76G_gps_data LC76G_read_data() {
 
 	HAL_UART_Receive_IT(&huart5, rx_buffer, 82);
 
+	if (rx_buffer[0] == '$' && rx_buffer[1] == 'G' && rx_buffer[2] == 'N' && rx_buffer[3] == 'G' && rx_buffer[4] == 'G' && rx_buffer[5] == 'A') {
+		data.time_H = 1;	
+	}
+	return data;
+
+	/*
 	char copy[7] = { 0 };
 	strncpy(copy, rx_buffer+1, 5);
 
-	if (rx_buffer[0] == '$' && !strcmp(copy, "GNGGA")) {
+	if (rx_buffer[0] == '$') {
 		char timeH[3] = {0};
 		char timeM[3] = {0};
 		char timeS[3] = {0};
@@ -87,6 +93,7 @@ LC76G_gps_data LC76G_read_data() {
 		char lonM[10] = {0};
 		char num_sats[3] = {0};
 		char alt[6] = {0};
+
 
 		// Index *should* start at the <Quality> Section
 		uint8_t index = 51;
@@ -179,7 +186,8 @@ LC76G_gps_data LC76G_read_data() {
 		gps_data.sats[1] = num_sats[1];
 		gps_data.sats[2] = num_sats[2];
 
-	}
+		data.time_H = 1;
+	} */
 
 	return data;
 }
