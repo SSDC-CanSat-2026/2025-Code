@@ -45,6 +45,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+#define BUFFER_SIZE 128
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -81,7 +83,7 @@ TIM_HandleTypeDef htim17;
 
 UART_HandleTypeDef huart5;
 UART_HandleTypeDef huart3;
-DMA_HandleTypeDef hdma_usart3_tx;
+DMA_HandleTypeDef hdma_uart5_rx;
 
 osThreadId readSensorsHandle;
 osThreadId sendTelemetryHandle;
@@ -89,6 +91,14 @@ osThreadId readCommandsHandle;
 osThreadId guideNavCtrlHandle;
 osSemaphoreId globalDataHandle;
 /* USER CODE BEGIN PV */
+
+uint8_t dma_buffer[BUFFER_SIZE] = { 0 };
+char transmit_buffer[BUFFER_SIZE] = { 0 };
+char receive_buffer[BUFFER_SIZE] = { 0 };
+
+uint8_t byte = 0;
+volatile uint16_t gps_size = 0;
+volatile uint8_t gps_ready = 0;
 
 /* USER CODE END PV */
 
@@ -123,6 +133,135 @@ void StartGNC(void const * argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+void process_character(char ch) { // Helper for the DMA function bellow
+	static uint8_t strlen = 0;
+	switch (ch){
+	case '\f':
+		receive_buffer[strlen] = ch;
+		strlen++;
+		receive_buffer[strlen] = '\0';
+		strlen++;
+		HAL_UART_Transmit(&huart3, &receive_buffer, strlen, HAL_MAX_DELAY);
+		strlen = 0;
+		break;
+	default:
+		if (strlen < BUFFER_SIZE) {
+			HAL_UART_Transmit(&huart3, ch, 1, HAL_MAX_DELAY);
+			receive_buffer[strlen] = ch;
+			strlen++;
+		}
+		break;
+	}
+}
+
+//void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+//{
+////    if (huart->Instance == UART5) {
+//    	HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//        HAL_UART_Transmit(&huart3, &byte, 1, 10);
+//        HAL_UART_Receive_IT(&huart5, &byte, 1);
+////    }
+//}
+
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
+{
+    if (huart->Instance == UART5)
+    {
+        gps_size = size;
+        gps_ready = 1;
+
+//        memcpy(receive_buffer, dma_buffer, size);
+
+        HAL_UARTEx_ReceiveToIdle_DMA(huart, dma_buffer, BUFFER_SIZE);
+        __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
+    }
+}
+/*
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
+{
+	volatile uint16_t debug_size = size;
+	volatile uint8_t first_byte = dma_buffer[0];
+    if (huart->Instance == UART5)
+    {
+        memcpy(receive_buffer, dma_buffer, size);
+        HAL_UART_Transmit(&huart3, dma_buffer, size, 100);
+
+        HAL_UARTEx_ReceiveToIdle_DMA(huart, dma_buffer, BUFFER_SIZE);
+        __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
+    }
+}
+*/
+
+//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size) {
+
+
+//	HAL_UART_Transmit(&huart3, (char*)&dma_buffer[0], BUFFER_SIZE, HAL_MAX_DELAY);
+//
+//	static uint8_t last_offset = 0;
+//
+//	for (int i = 0; i < BUFFER_SIZE; i++) {
+//		receive_buffer[i] = dma_buffer[last_offset];
+//
+//		last_offset++;
+//		if (last_offset == BUFFER_SIZE) {
+//			last_offset = 0;
+//		}
+//	}
+
+//	HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//	HAL_Delay(100);
+//	HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+//	HAL_UART_Transmit(&huart3, &dma_buffer, BUFFER_SIZE, HAL_MAX_DELAY);
+//	memcpy(receive_buffer, dma_buffer, size);
+
+//
+//	if (offset != last_offset) {
+//		if (offset < last_offset) { // Buffer wrapped around
+//			while (last_offset < BUFFER_SIZE) {
+//				process_character((char)dma_buffer[last_offset]);
+//				last_offset++;
+//			}
+//			last_offset = 0;
+//			while (last_offset <= offset) {
+//				process_character((char)dma_buffer[last_offset]);
+//				last_offset++;
+//			}
+//			if (last_offset == BUFFER_SIZE) {
+//				last_offset = 0;
+//			}
+//		} else { // Buffer did not wrap around
+//			while (last_offset <= offset) {
+//				process_character((char)dma_buffer[last_offset]);
+//				last_offset++;
+//			}
+//			if (last_offset == BUFFER_SIZE) {
+//				last_offset = 0;
+//			}
+//		}
+//	}
+
+//	HAL_UARTEx_ReceiveToIdle_DMA(&huart5, dma_buffer, BUFFER_SIZE); // receive until idle, then trigger interrupt
+//	__HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT); // Disables "Half Transfer" interrupt
+//}
+
+void HAL_UARTEx_ErrorCallback(UART_HandleTypeDef *huart) {
+	while(1) {
+		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+		HAL_Delay(100);
+		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+		HAL_Delay(100);
+		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+		HAL_Delay(200);
+		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+		HAL_Delay(200);
+		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+		HAL_Delay(200);
+		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+		HAL_Delay(200);
+	}
+//	HardFault_Handler(); // FIXME : If this is still necessary by comp, just removet the call to the HardFault
+}
 
 /* USER CODE END 0 */
 
@@ -176,10 +315,33 @@ int main(void)
   // Feedback LED
   HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 
-  // Enable GPS and XBEE
+  // Enable XBEE
   HAL_GPIO_WritePin(XBEE_RST_GPIO_Port, XBEE_RST_Pin, GPIO_PIN_SET);
+
+  // Hold GPS in reset (LOW)
+  HAL_GPIO_WritePin(GPS_RST_GPIO_Port, GPS_RST_Pin, GPIO_PIN_RESET);
+  HAL_Delay(100);
+
+  // Fully reset UART5 peripheral
+  __HAL_RCC_UART5_FORCE_RESET();
+  __HAL_RCC_UART5_RELEASE_RESET();
+  MX_UART5_Init();   // reinitialize UART
+
+  // Clear all flags
+  __HAL_UART_CLEAR_OREFLAG(&huart5);
+  __HAL_UART_CLEAR_FEFLAG(&huart5);
+  __HAL_UART_CLEAR_NEFLAG(&huart5);
+  __HAL_UART_CLEAR_PEFLAG(&huart5);
+
+  // Start DMA
+//  HAL_UARTEx_ReceiveToIdle_DMA(&huart5, dma_buffer, BUFFER_SIZE);
+//  __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT);
+
+  // Now release GPS reset
   HAL_GPIO_WritePin(GPS_RST_GPIO_Port, GPS_RST_Pin, GPIO_PIN_SET);
-  HAL_Delay(3000); // wait for the Xbee to get brought back up again
+  HAL_Delay(5000);
+
+
 
   // Disable ALL chip selects
   HAL_GPIO_WritePin(IMU_nCS_GPIO_Port, IMU_nCS_Pin, GPIO_PIN_SET);
@@ -198,6 +360,7 @@ int main(void)
 
   // Initialize LC76G
   LC76G_init();
+  HAL_Delay(1000); // Ignore PAIR001 acks
 
   // Initializing AMT10E2
   QENC_Init_Encoder0();
@@ -205,6 +368,21 @@ int main(void)
   //drv8838_init(&htim15, DRV_DIR_GPIO_Port, DRV_DIR_Pin);
 
   init_mission_data();
+
+//  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//  osDelay(100);
+//  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+
+
+
+  // Check if ORE flag is set, which can happen if data is present on UART RX line
+  if (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_ORE)) {
+    __HAL_UART_CLEAR_FLAG(&huart5, UART_CLEAR_OREF);
+  }
+  // receive until idle, then trigger interrupt
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart5, dma_buffer, BUFFER_SIZE); // receive until idle, then trigger interrupt
+  __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT); // Disables "Half Transfer" interrupt
+//  __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_TC); // Disables "Transfer Complete" interrupt
 
 //  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
   /* USER CODE END 2 */
@@ -215,37 +393,37 @@ int main(void)
 
   /* Create the semaphores(s) */
   /* definition and creation of globalData */
-  osSemaphoreDef(globalData);
-  globalDataHandle = osSemaphoreCreate(osSemaphore(globalData), 1);
+//  osSemaphoreDef(globalData);
+//  globalDataHandle = osSemaphoreCreate(osSemaphore(globalData), 1);
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
-  /* add semaphores, ... */
+//  /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
-  /* start timers, add new ones, ... */
+//  /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
+//  /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
   /* definition and creation of readSensors */
-  osThreadDef(readSensors, StartReadSensors, osPriorityNormal, 0, 512);
-  readSensorsHandle = osThreadCreate(osThread(readSensors), NULL);
-
-  /* definition and creation of sendTelemetry */
-  osThreadDef(sendTelemetry, StartSendTelemetry, osPriorityNormal, 0, 512);
-  sendTelemetryHandle = osThreadCreate(osThread(sendTelemetry), NULL);
-
-  /* definition and creation of readCommands */
-  osThreadDef(readCommands, StartReadCommands, osPriorityNormal, 0, 512);
-  readCommandsHandle = osThreadCreate(osThread(readCommands), NULL);
-
-  /* definition and creation of guideNavCtrl */
-  osThreadDef(guideNavCtrl, StartGNC, osPriorityIdle, 0, 512);
-  guideNavCtrlHandle = osThreadCreate(osThread(guideNavCtrl), NULL);
+//  osThreadDef(readSensors, StartReadSensors, osPriorityNormal, 0, 512);
+//  readSensorsHandle = osThreadCreate(osThread(readSensors), NULL);
+//
+//  /* definition and creation of sendTelemetry */
+//  osThreadDef(sendTelemetry, StartSendTelemetry, osPriorityNormal, 0, 512);
+//  sendTelemetryHandle = osThreadCreate(osThread(sendTelemetry), NULL);
+//
+//  /* definition and creation of readCommands */
+//  osThreadDef(readCommands, StartReadCommands, osPriorityNormal, 0, 512);
+//  readCommandsHandle = osThreadCreate(osThread(readCommands), NULL);
+//
+//  /* definition and creation of guideNavCtrl */
+//  osThreadDef(guideNavCtrl, StartGNC, osPriorityIdle, 0, 512);
+//  guideNavCtrlHandle = osThreadCreate(osThread(guideNavCtrl), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -253,23 +431,33 @@ int main(void)
 
 
 //  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-//  osDelay(100);
+//  osDelay(3000);
 //  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
-  osKernelStart();
+//  osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint8_t byte;
+  uint8_t arr[15];
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  if (receive_buffer[0] != '\0') {
+		  HAL_UART_Transmit(&huart3, receive_buffer, gps_size, HAL_MAX_DELAY);
+		  memset(receive_buffer, 0, sizeof(receive_buffer));
+	  }
+	  if (gps_ready) {
+		  memcpy(receive_buffer, dma_buffer, gps_size);
+		  gps_ready = 0;
+	  }
   }
   /* USER CODE END 3 */
 }
@@ -1057,7 +1245,8 @@ static void MX_UART5_Init(void)
   huart5.Init.OverSampling = UART_OVERSAMPLING_16;
   huart5.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
   huart5.Init.ClockPrescaler = UART_PRESCALER_DIV1;
-  huart5.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+//  huart5.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_MSBFIRST_INIT;
+//  huart5.AdvancedInit.MSBFirst = UART_ADVFEATURE_MSBFIRST_ENABLE;
   if (HAL_UART_Init(&huart5) != HAL_OK)
   {
     Error_Handler();
@@ -1139,9 +1328,9 @@ static void MX_DMA_Init(void)
   __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
-  /* DMA1_Channel3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 
 }
 
@@ -1248,89 +1437,6 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-void SendTelemetry(void *argument)
-{
-  /* USER CODE BEGIN SendTelemetry */
-
-  // this can probably be dynamically typed to take the sizeof() each property instead of being hardcoded
-  unsigned int property_sizes[] = {2, 4, 4, 1, STATE_TEXT_LEN, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 2, 4, 4, 4, 4, 1, CMD_ECHO_LEN};
-
-  /* Infinite loop */
-  for (;;)
-  {
-    // create buffer to copy mission data into
-    // +19 for all necessary commas
-    char telemetry_string[sizeof(global_mission_data) + 19];
-    char *data_pointer = &global_mission_data;
-
-    // external index!!
-    unsigned int s_index = 0;
-
-    // find length of array
-    unsigned int num_properties = sizeof(property_sizes) / sizeof(unsigned int);
-    for (unsigned int k = 0; k < num_properties; k++)
-    {
-      // memcpy() transfers 'k' bytes of data from the struct to the string
-      memcpy(*telemetry_string + index, data_pointer, property_sizes[k]);
-
-      // move the data pointer and the string pointer separately (commas in the
-      // resulting string mean the two positions are not always equal)
-      data_pointer += property_sizes[k];
-      s_index += property_sizes[k];
-
-      // don't add a comma after the last property!
-      if (k < num_properties - 1)
-      {
-        telemetry_string[s_index] = ',';
-        s_index = s_index + 1;
-      }
-    }
-
-    // after copying all the data over, add a null terminator at the end
-    telemetry_string[s_index] = '\0';
-
-    // char test_string[] = "TESTLEMETRY";
-
-    // HAL_UART_Transmit(&huart4, test_string, sizeof(test_string), 250);
-
-    /*
-    telemetry_string[] now contains global_mission_data formatted as a string of characters
-    data in LITTLE ENDIAN format:
-      TEAM_ID = 3174 = 0x0C66 and is stored as ASCII codes 0x66 ('f') followed by 0x0C (NP form feed) in the string
-
-    string format is as follows in terms of bytes:
-      string[0:1] = TEAM_ID[1:0]
-      string[2:5] = MISSION_TIME[3:0] <-- format to UTC time (hh:mm:ss)
-      string[6:9] = PACKET_COUNT[3:0]
-      string[10] = MODE
-      string[11:20] = STATE[0:9]
-      string[21:24] = ALTITUDE[3:0]
-      string[25:28] = TEMPERATURE[3:0]
-      string[29:32] = PRESSURE[3:0]
-      string[33:36] = VOLTAGE[3:0]
-      string[37:40] = GYRO_R[3:0]
-      string[41:44] = GYRO_P[3:0]
-      string[45:48] = GYRO_Y[3:0]
-      string[49:52] = ACCEL_R[3:0]
-      string[53:56] = ACCEL_P[3:0]
-      string[57:60] = ACCEL_Y[3:0]
-      string[61:64] = MAG_R[3:0]
-      string[65:68] = MAG_P[3:0]
-      string[69:72] = MAG_Y[3:0]
-      string[73:74] = AUTO_GYRO_ROTATION_RATE[1:0]
-      string[75:78] = GPS_TIME[3:0]
-      string[79:82] = GPS_ALTITUDE[3:0]
-      string[83:86] = GPS_LATITUDE[3:0]
-      string[87:90] = GPS_LONGITUDE[3:0]
-      string[91] = GPS_SATS
-      string[92:101] = CMD_ECHO[0:9]
-    */
-
-//    HAL_Delay(1000);
-  }
-  /* USER CODE END SendTelemetry */
-}
-
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartReadSensors */
@@ -1370,14 +1476,41 @@ void StartReadSensors(void const * argument)
 	  imu_data = ICM42688P_read_data();
 	  // DELETE: broken/unused sensor data
 	  // mag_data = BMM150_read_mag_data(&bmm150);
-	  gps_data = LC76G_read_data();
+//	  gps_data = LC76G_read_data();
 
-	  if (gps_data.time_H) {
-		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-		  osDelay(100);
-		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
-		  osDelay(100);
-	  }
+//	  LC76G_test(&huart5);
+
+//	  char test_msg[] = "$PAIR865,0,0*31\r\n";
+	  //	char buf[256];
+
+//      HAL_UART_Transmit(&huart5, &test_msg, sizeof(test_msg)-1, HAL_MAX_DELAY);
+//	  HAL_UART_Receive_IT(&huart5, &byte, 1);
+//	  HAL_UART_Transmit(&huart3, &byte, 1, HAL_MAX_DELAY);
+
+//	  if (gps_data.time_H) {
+//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//		  osDelay(100);
+//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+//		  osDelay(100);
+//	  }
+
+
+//	  char buff[39];
+//	  LC76G_test(&buff, &huart5);
+//	  HAL_UART_Transmit(&huart3, &buff, 39, HAL_MAX_DELAY);
+//	  HAL_UART_Transmit(&huart5, &dma_buffer, BUFFER_SIZE, HAL_MAX_DELAY);
+//	  if (receive_buffer[0] == '\0') {
+//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//		  osDelay(100);
+//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+//	  } else {
+//		  HAL_UART_Transmit(&huart3, &dma_buffer, BUFFER_SIZE, HAL_MAX_DELAY);
+//		  memset(receive_buffer, 0, sizeof(receive_buffer));
+//	  }
+
+	  osDelay(1000);
+
+
 //	  HAL_UART_Transmit(&huart3, gps_data.sats, 3, HAL_MAX_DELAY);
 	  // read quadrature encoder values
 	  enc_count = QENC_Get_Encoder0_Count();
@@ -1444,9 +1577,9 @@ void StartReadSensors(void const * argument)
 	  global_mission_data.AUTO_GYRO_ROTATION_RATE = (enc_count - prev_enc_count) * 3;
 
 	  // read gyro acceleration data
-	  global_mission_data.ACCEL_R = imu_data.accel_r;
-	  global_mission_data.ACCEL_P = imu_data.accel_p;
-	  global_mission_data.ACCEL_Y = imu_data.accel_y;
+	  global_mission_data.ACCEL_R = imu_data.accel_y;
+	  global_mission_data.ACCEL_P = imu_data.accel_x;
+	  global_mission_data.ACCEL_Y = imu_data.accel_z;
 
 	  // update magnetometer; dummy data
 	  global_mission_data.MAG_R = rand() % 1000 / 1000.0; // mag_r
@@ -1463,6 +1596,12 @@ void StartReadSensors(void const * argument)
 
 //	  if (gps_data.time_H != 0 && gps_data.time_S != 0 && gps_data.time_S != 0) {
 //		  sprintf(global_mission_data.GPS_TIME, "%d:%d:%d", gps_data.time_H, gps_data.time_M, gps_data.time_S);
+//	  } else if (gps_data.time_H != 0) {
+//		  sprintf(global_mission_data.GPS_TIME, "%d:XX:XX", gps_data.time_H);
+//	  } else if (gps_data.time_M != 0) {
+//		  sprintf(global_mission_data.GPS_TIME, "XX:%d:XX", gps_data.time_M);
+//	  } else if (gps_data.time_S != 0) {
+//		  sprintf(global_mission_data.GPS_TIME, "XX:XX:%d", gps_data.time_S);
 //	  }
 //	  if (gps_data.altitude != 0) {
 //		  global_mission_data.GPS_ALTITUDE = gps_data.altitude;
@@ -1553,7 +1692,7 @@ void StartSendTelemetry(void const * argument)
 		);
 		// str_len = sizeof(telemetry_string);
 		// send the first part of the packet over UART
-		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
+//		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
 		// clear the buffer
 		memset(telemetry_string, 0, sizeof(telemetry_string));
 		// fill the buffer with the second half of the packet
@@ -1573,7 +1712,7 @@ void StartSendTelemetry(void const * argument)
 						  global_mission_data.CMD_ECHO                 // tracks previously received command
 		);
 		// send the second half of the packet over UART
-		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
+//		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
 
 		/*char test_string[30];
 		str_len = sprintf(test_string, "accel_z: %d", imu_data.accel_z);
@@ -1583,18 +1722,13 @@ void StartSendTelemetry(void const * argument)
 		global_mission_data.PACKET_COUNT = global_mission_data.PACKET_COUNT + 1;
 
     // Commented for GPS testing
-		// HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-		// osDelay(100);
-		// HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+//		 HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//		 osDelay(100);
+//		 HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 
 		osSemaphoreRelease(globalDataHandle);
 
 	  osDelay(1000);
-	  }
-	  else {
-//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-		  osThreadYield();
-		  continue;
 	  }
   } // END FOR LOOP
 
@@ -1628,7 +1762,7 @@ void StartReadCommands(void const * argument)
 			  continue;
 		  }
 
-	      HAL_UART_Receive_IT(&huart3, rx_buff, 22);
+//	      HAL_UART_Receive_IT(&huart3, rx_buff, 22); FIXME : Un-comment this line
 	      // HAL_UART_Transmit(&huart3, rx_buff, sizeof(rx_buff), HAL_MAX_DELAY);
 
 	      // step1: convert rx_buff array of "uint8_t"s into array of "chars"
@@ -1792,7 +1926,10 @@ void StartReadCommands(void const * argument)
 	      // DELETE:
 	      else
 	      {
-	        //      HAL_UART_Transmit(&huart3, rx_string, sizeof(rx_string), HAL_MAX_DELAY);
+	    	  if (rx_string[0] != '\0') {
+				  HAL_UART_Transmit(&huart3, rx_string, sizeof(rx_string), HAL_MAX_DELAY);
+				  LC76G_get_bitrate(&huart5);
+	    	  }
 	      }
 	      // clear command buffer
 	      memset(rx_buff, 0, sizeof(rx_buff));

@@ -18,12 +18,12 @@ static const double convert = 0.0166666667;
 // Checksums calculated using: https://nmeachecksum.eqth.net/
 
 // PAIR messages
-static const char LC76_ENABLE_GGA[] = "$PAIR062,0,1*3F";
-static const char LC76_DISABLE_GGL[] = "$PAIR062,1,0*3F";
-static const char LC76_DISABLE_GSA[] = "$PAIR062,2,0*3C";
-static const char LC76_DISABLE_GSV[] = "$PAIR062,3,0*3D";
-static const char LC76_DISABLE_RMC[] = "$PAIR062,4,0*3A";
-static const char LC76_DISABLE_VTG8[] = "$PAIR062,5,0*3B";
+static const char LC76_ENABLE_GGA[] = "$PAIR062,0,1*3F\r\n";
+static const char LC76_DISABLE_GGL[] = "$PAIR062,1,0*3F\r\n";
+static const char LC76_DISABLE_GSA[] = "$PAIR062,2,0*3C\r\n";
+static const char LC76_DISABLE_GSV[] = "$PAIR062,3,0*3D\r\n";
+static const char LC76_DISABLE_RMC[] = "$PAIR062,4,0*3A\r\n";
+static const char LC76_DISABLE_VTG8[] = "$PAIR062,5,0*3B\r\n";
 
 // We need: time, lat, lon, alt, numberOfSats
 // Time format: HH:MM:SS
@@ -46,7 +46,11 @@ extern LC76G_gps_data gps_data;
 
 /* Define functions */
 void LC76G_init();
+void LC76G_get_array(UART_HandleTypeDef *huart,uint8_t *array[], uint16_t size);
+void LC76G_test(UART_HandleTypeDef* huart);
+void LC76G_get_bitrate(UART_HandleTypeDef* huart);
 LC76G_gps_data LC76G_read_data();
+LC76G_gps_data LC76G_read_buffer(char *buffer, uint8_t *head, uint8_t *tail);
 
 /* Helper functions */
 double convert_to_double(char string_double[]);
