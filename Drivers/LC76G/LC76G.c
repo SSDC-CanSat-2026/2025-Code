@@ -3,13 +3,12 @@
 #include <math.h>
 
 // Initialize global fields
-uint8_t gps_dma_buffer[GPS_DMA_BUFFER_SIZE] = {0};
 LC76G_gps_data gps_data;
 
 void LC76G_init(void)
 {
     HAL_UART_Transmit(&huart5, "$PAIR062,0,0*3E\r\n", 18, HAL_MAX_DELAY); // Disable GGA
-    HAL_Delay(100);
+    HAL_Delay(100); // Use delays since we don't care about the ACK messages
 
     HAL_UART_Transmit(&huart5, "$PAIR062,1,0*3F\r\n", 18, HAL_MAX_DELAY); // Disable GLL
     HAL_Delay(100);
@@ -29,39 +28,6 @@ void LC76G_init(void)
     HAL_UART_Transmit(&huart5, "$PAIR062,0,1*3F\r\n", 18, HAL_MAX_DELAY); // Enable GGA
 }
 
-/*void LC76G_init()
-{
-	char test_buff[32];
-    // Disable all other types of NEMA sentences
-    HAL_UART_Transmit(&huart5, LC76_DISABLE_GGL, strlen(LC76_DISABLE_GGL), TIMEOUT);
-    HAL_UART_Receive(&huart5, NULL, 32, TIMEOUT);
-
-    HAL_UART_Transmit(&huart5, LC76_DISABLE_GSA, strlen(LC76_DISABLE_GSA), TIMEOUT);
-    HAL_UART_Receive(&huart5, NULL, 32, TIMEOUT);
-
-    HAL_UART_Transmit(&huart5, LC76_DISABLE_GSV, strlen(LC76_DISABLE_GSV), TIMEOUT);
-    HAL_UART_Receive(&huart5, NULL, 32, TIMEOUT);
-
-    HAL_UART_Transmit(&huart5, LC76_DISABLE_RMC, strlen(LC76_DISABLE_RMC), TIMEOUT);
-    HAL_UART_Receive(&huart5, NULL, 32, TIMEOUT);
-
-    HAL_UART_Transmit(&huart5, LC76_DISABLE_VTG8, strlen(LC76_DISABLE_VTG8), TIMEOUT);
-    HAL_UART_Receive(&huart5, NULL, 32, TIMEOUT);
-
-    // Enable GGA sentences
-    HAL_UART_Transmit(&huart5, LC76_ENABLE_GGA, strlen(LC76_ENABLE_GGA), TIMEOUT);
-    HAL_UART_Receive(&huart5, NULL, 32, TIMEOUT);
-
-//  Old Tim DMA stuff, not sure if needed but will not use for now
-//    // Clear UART idle flag if needed
-//    if (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_IDLE)) {
-//    __HAL_UART_CLEAR_IDLEFLAG(&huart5);
-//    }
-//
-//    // Enable DMA reception
-//    HAL_UARTEx_ReceiveToIdle_DMA(&huart5, gps_dma_buffer, GPS_DMA_BUFFER_SIZE);
-} */
-
 void LC76G_test(UART_HandleTypeDef* huart) {
 	char test_msg[] = "$PAIR865,0,0*31\r\n";
 //	char buf[256];
@@ -74,19 +40,7 @@ void LC76G_test(UART_HandleTypeDef* huart) {
 //	HAL_UART_Transmit(&huart3, &buf, 256, HAL_MAX_DELAY);
 }
 
-void LC76G_get_bitrate(UART_HandleTypeDef* huart) {
-	char test_msg[] = "$PAIR865,0,0*31\r\n";
-	char buf[32];
-
-	HAL_UART_Transmit(huart, &test_msg, 17, HAL_MAX_DELAY);
-	HAL_UART_Receive(huart, &buf, 32, 0x8FF);
-	HAL_UART_Transmit(&huart3, &buf, 32, HAL_MAX_DELAY);
-}
-
-LC76G_gps_data LC76G_read_data() {
-
-	LC76G_gps_data data;
-
+void LC76G_read_data(char rx_buffer[], int n, LC76G_gps_data* data) {
 	// The init() sets the GGA message set to be the only one used.
 	// The protocol specification can be found at this link
 	// https://quectel.com/content/uploads/2024/02/Quectel_LC26GABLC76GLC86G_Series_GNSS_Protocol_Specification_V1.1.pdf
@@ -112,62 +66,38 @@ LC76G_gps_data LC76G_read_data() {
 	// <Checksum> 			- Hexadecimal, starts with '*'
 	// <CR><LF>				- 2 Characters
 
-	uint8_t rx_buffer[82] = { 0 };
+	data->time_H[0] = rx_buffer[7];
+	data->time_H[1] = rx_buffer[8];
 
+	data->time_M[0] = rx_buffer[9];
+	data->time_M[1] = rx_buffer[10];
 
-	HAL_UART_Receive_IT(&huart5, rx_buffer, 82);
+	data->time_S[0] = rx_buffer[11];
+	data->time_S[1] = rx_buffer[12];
 
+	char latD[2];
+	char latM[9];
+	for (uint8_t i = 0; i < 2; i++) { // Latitude Degrees
+		latD[i] = rx_buffer[i+18];
+	}
+	for (uint8_t i = 0; i < 9; i++) { // Latitude Minutes
+		latM[i] = rx_buffer[i+20];
+	}
 
+	char lonD[2];
+	char lonM[9];
+	for (uint8_t i = 0; i < 2; i++) { // Longitude Degrees
+		lonD[i] = rx_buffer[i+32];
+	}
+	for (uint8_t i = 0; i < 9; i++) { // Latitude Degrees
+		lonM[i] = rx_buffer[i+34];
+	}
 
-//	if (rx_buffer[0] == '$' && rx_buffer[1] == 'G' && rx_buffer[2] == 'N' && rx_buffer[3] == 'G' && rx_buffer[4] == 'G' && rx_buffer[5] == 'A') {
-//		data.time_H = 1;
-//	}
-//	return data;
-//
-//	char copy[7] = { 0 };
-//	strncpy(copy, rx_buffer+1, 5);
+	char num_sats[2];
+	for (uint8_t i = 0; i < 2; i++) { // Number of Satellites
+		num_sats[i] = rx_buffer[i+49];
+	}
 
-	if (rx_buffer[0] == '$') {
-		char timeH[3] = {0};
-		char timeM[3] = {0};
-		char timeS[3] = {0};
-
-//		char latD[3] = {0};
-//		char latM[10] = {0};
-//		char lonD[3] = {0};
-//		char lonM[10] = {0};
-//		char num_sats[3] = {0};
-//		char alt[6] = {0};
-
-
-		// Index *should* start at the <Quality> Section
-		uint8_t index = 51;
-
-		for (uint8_t i = 0; i < 2; i++) { // Hours
-			timeH[i] = rx_buffer[i+7];
-		}
-		for (uint8_t i = 0; i < 2; i++) { // Minutes
-			timeM[i] = rx_buffer[i+9];
-		}
-		for (uint8_t i = 0; i < 2; i++) { // Seconds
-			timeS[i] = rx_buffer[i+11];
-		}
-//		for (uint8_t i = 0; i < 2; i++) { // Latitude Degrees
-//			latD[i] = rx_buffer[i+18];
-//		}
-//		for (uint8_t i = 0; i < 9; i++) { // Latitude Minutes
-//			latM[i] = rx_buffer[i+20];
-//		}
-//		for (uint8_t i = 0; i < 2; i++) { // Longitude Degrees
-//			lonD[i] = rx_buffer[i+32];
-//		}
-//		for (uint8_t i = 0; i < 9; i++) { // Latitude Degrees
-//			lonM[i] = rx_buffer[i+34];
-//		}
-//		for (uint8_t i = 0; i < 2; i++) { // Number of Satellites
-//			num_sats[i] = rx_buffer[i+49];
-//		}
-//
 //		// Various while loops are the only way I can think of getting
 //		//     to the necessary field since the field sizes aren't fixed.
 //		while (rx_buffer[index] != ',') { // Quality
@@ -188,13 +118,15 @@ LC76G_gps_data LC76G_read_data() {
 //			gps_data.altitude = altitude;
 //		}
 //
-//		// Latitude
-//		double latitudeDegrees = convert_to_double(latD);
-//		double latitudeMinutes = convert_to_double(latM);
-//		if (latitudeDegrees != -1 && latitudeMinutes != -1) {
-//			double LAT = latitudeDegrees + (latitudeMinutes * convert);
-//			gps_data.lat = LAT;
-//		}
+	// Latitude
+//	double latitudeDegrees = convert_to_double(latD);
+//	double latitudeMinutes = convert_to_double(latM);
+//	if (latitudeDegrees != -1 && latitudeMinutes != -1) {
+//		double LAT = latitudeDegrees + (latitudeMinutes * convert);
+//		data->lat = LAT;
+//	} else {
+//	data->lat = -1;
+//	}
 //
 //		// Longitude
 //		double longitudeDegrees = convert_to_double(lonD);
@@ -211,78 +143,85 @@ LC76G_gps_data LC76G_read_data() {
 //		}
 //
 //		// Hours
-//		uint8_t hours = convert_to_integer(timeH);
-//		if (hours != -1) {
-//			gps_data.time_H = hours;
-//		}
-//
-//		// Minutes
-//		uint8_t minutes = convert_to_integer(timeM);
-//		if (minutes != -1) {
-//			gps_data.time_H = minutes;
-//		}
-//		// Seconds
-//		uint8_t seconds = convert_to_integer(timeS);
-//		if (seconds != -1) {
-//			gps_data.time_H = seconds;
-//		}
 //
 //		gps_data.sats[0] = num_sats[0];
 //		gps_data.sats[1] = num_sats[1];
 //		gps_data.sats[2] = num_sats[2];
 //
 //		data.time_H = 1;
-	}
-
-	return data;
 }
 
-void LC76G_get_array(UART_HandleTypeDef *huart,uint8_t *array[], uint16_t size) {
-	HAL_UART_Receive_IT(huart, array, size);//, HAL_MAX_DELAY);
-}
+int parse_gga(char *sentence, GGA_Data_t *out)
+{
+    if (strncmp(sentence, "$GNGGA", 6) != 0)
+        return 0;
 
-//LC76G_gps_data LC76G_read_buffer(char *buffer, uint8_t *head, uint8_t *tail) {
-//	LC76G_gps_data data;
-//	if (tail == head) {
-//		data.altitude = -1;
-//		return data;
-//	}
-//
-//	char local_buffer[200];
-//	uint8_t counter = 0;
-//	while (*tail != *head) {
-//		local_buffer[counter] = buffer[*tail];
-//
-//		*tail++;
-//		if (*tail > 200) {
-//			*tail = 0;
-//		}
-//		counter++;
-//	}
-//
-//	data.altitude = 1;
-//	return data;
-//}
+    char *fields[MAX_GGA_FIELDS] = {0};
+    int field_count = 0;
 
-double convert_to_double(char string_double[]){
-    char *endptr;
-    double result = strtod(string_double, &endptr);
+    char *p = sentence;
+    fields[field_count++] = p;
 
-    if(result == 0) {
-        return -1;
+    while (*p && field_count < MAX_GGA_FIELDS)
+    {
+        if (*p == ',' || *p == '*')
+        {
+            *p = '\0';
+            fields[field_count++] = p + 1;
+        }
+        p++;
     }
 
-    return result;
+    if (field_count < 10)
+        return 0;
+
+    out->fix_quality = (fields[6][0]) ? atoi(fields[6]) : 0;
+    out->num_satellites  = (fields[7][0]) ? atoi(fields[7]) : 0;
+    out->hdop        = (fields[8][0]) ? atof(fields[8]) : 0.0f;
+    out->altitude    = (fields[9][0]) ? atof(fields[9]) : 0.0f;
+
+    out->latitude = nmea_to_decimal(fields[2], fields[3][0]);
+    out->longitude = nmea_to_decimal(fields[4], fields[5][0]);
+
+    return 1;
 }
 
-uint8_t convert_to_integer(char string_int[]) {
-	char *endptr;
-	double result = strtol(string_int, &endptr);
+//double convert_to_double(char string_double[]){
+//    char *endptr;
+//    double result = strtod(string_double, &endptr);
+//
+//    if(result == 0) {
+//        return -1;
+//    }
+//
+//    return result;
+//}
+//
+//uint8_t convert_to_integer(char string_int[]) {
+//	char *endptr;
+//	double result = strtol(string_int, &endptr);
+//
+//	if(result == 0) {
+//		return -1;
+//	}
+//
+//	return result;
+//}
 
-	if(result == 0) {
-		return -1;
-	}
+static float nmea_to_decimal(char *coord, char dir)
+{
+    if (coord == NULL || coord[0] == '\0')
+        return 0.0f;
 
-	return result;
+    float raw = atof(coord);
+
+    int degrees = (int)(raw / 100);
+    float minutes = raw - (degrees * 100);
+
+    float decimal = degrees + (minutes / 60.0f);
+
+    if (dir == 'S' || dir == 'W')
+        decimal *= -1.0f;
+
+    return decimal;
 }
-

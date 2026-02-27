@@ -3,13 +3,14 @@
 
 #include "stm32g4xx_hal.h"
 #include "uart_interrupt.h"
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
 
+#define MAX_GGA_FIELDS 20
 #define TIMEOUT 5
-#define ARRAY_LEN(x)            (sizeof(x) / sizeof((x)[0]))
 
 // DMA buffer aligned to 4-bytes
-#define GPS_DMA_BUFFER_SIZE 128
-extern uint8_t gps_dma_buffer[GPS_DMA_BUFFER_SIZE] __attribute__((aligned(4)));
 
 // Constant for converting Minutes to Degrees
 static const double convert = 0.0166666667;
@@ -30,9 +31,9 @@ static const char LC76_DISABLE_VTG8[] = "$PAIR062,5,0*3B\r\n";
 // Degrees in decimal degrees
 // Altitude in meters above sea level
 typedef struct {
-    uint8_t time_H;         // UTC Time
-    uint8_t time_M;
-    uint8_t time_S;
+    char time_H[3];         // UTC Time
+    char time_M[3];
+    char time_S[3];
 
     double lat;
     double lon;
@@ -44,18 +45,27 @@ typedef struct {
 }LC76G_gps_data;
 extern LC76G_gps_data gps_data;
 
+typedef struct
+{
+    uint8_t fix_quality;
+    uint8_t num_satellites;
+    float hdop;
+    float latitude;     // decimal degrees
+    float longitude;    // decimal degrees
+    float altitude;     // meters
+}GGA_Data_t;
+extern GGA_Data_t data;
+
 /* Define functions */
+// Set the constellation we will use (GNGGA)
 void LC76G_init();
-void LC76G_get_array(UART_HandleTypeDef *huart,uint8_t *array[], uint16_t size);
-void LC76G_test(UART_HandleTypeDef* huart);
-void LC76G_get_bitrate(UART_HandleTypeDef* huart);
-LC76G_gps_data LC76G_read_data();
-LC76G_gps_data LC76G_read_buffer(char *buffer, uint8_t *head, uint8_t *tail);
+// Pass in the received message and parse fields
+void LC76G_read_data(char rx_buffer[], int n, LC76G_gps_data* data);
+int parse_gga(char *sentence, GGA_Data_t *out);
 
 /* Helper functions */
-double convert_to_double(char string_double[]);
-uint8_t convert_to_integer(char string_int[]);
-
-void LC76G_get_array(UART_HandleTypeDef *huart,uint8_t *array[], uint16_t size);
+//double convert_to_double(char string_double[]);
+//uint8_t convert_to_integer(char string_int[]);
+static float nmea_to_decimal(char *coord, char dir);
 
 #endif /* _LC76G_H_ */
