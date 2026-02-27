@@ -1,5 +1,5 @@
-../Drivers/LC76G/LC76G.c:9:6:LC76G_init	1
-../Drivers/LC76G/LC76G.c:42:16:LC76G_read_data	18
-../Drivers/LC76G/LC76G.c:187:6:LC76G_get_array	1
-../Drivers/LC76G/LC76G.c:191:8:convert_to_double	2
-../Drivers/LC76G/LC76G.c:202:9:convert_to_integer	2
+../Drivers/LC76G/LC76G.c:8:6:LC76G_init	1
+../Drivers/LC76G/LC76G.c:31:6:LC76G_test	1
+../Drivers/LC76G/LC76G.c:43:6:LC76G_read_data	6
+../Drivers/LC76G/LC76G.c:154:5:parse_gga	11
+../Drivers/LC76G/LC76G.c:211:14:nmea_to_decimal	5

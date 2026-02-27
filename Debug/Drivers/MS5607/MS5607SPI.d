@@ -44,7 +44,7 @@ Drivers/MS5607/MS5607SPI.o: ../Drivers/MS5607/MS5607SPI.c \
  ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h \
  ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart.h \
  ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h \
- C:/Users/Joel/VSCode/FSW_CanSat/Ashlee's\ Repo/CanSat2025_FSW/Drivers/ICM42688P/ICM42688PSPI.h \
+ C:/Users/Joel/VSCode/CanSat\ 24-25/2025-Code/Drivers/ICM42688P/ICM42688PSPI.h \
  ../Drivers/CMSIS/Device/ST/STM32G4xx/Include/stm32g491xx.h \
  ../Core/Inc/global.h
 ../Drivers/MS5607/MS5607SPI.h:
@@ -92,6 +92,6 @@ Drivers/MS5607/MS5607SPI.o: ../Drivers/MS5607/MS5607SPI.c \
 ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h:
 ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart.h:
 ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h:
-C:/Users/Joel/VSCode/FSW_CanSat/Ashlee's\ Repo/CanSat2025_FSW/Drivers/ICM42688P/ICM42688PSPI.h:
+C:/Users/Joel/VSCode/CanSat\ 24-25/2025-Code/Drivers/ICM42688P/ICM42688PSPI.h:
 ../Drivers/CMSIS/Device/ST/STM32G4xx/Include/stm32g491xx.h:
 ../Core/Inc/global.h:

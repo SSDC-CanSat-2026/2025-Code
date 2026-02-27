@@ -379,12 +379,6 @@ int main(void)
   {
     /* USER CODE END WHILE */
 
-//	  if (gps_ready) {
-//		  gps_ready = 0;
-//		  memcpy(receive_buffer, dma_buffer, gps_size);
-//		  HAL_UART_Transmit(&huart3, receive_buffer, gps_size, HAL_MAX_DELAY);
-//	  }
-
     /* USER CODE BEGIN 3 */
 
   }
@@ -1174,8 +1168,7 @@ static void MX_UART5_Init(void)
   huart5.Init.OverSampling = UART_OVERSAMPLING_16;
   huart5.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
   huart5.Init.ClockPrescaler = UART_PRESCALER_DIV1;
-//  huart5.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_MSBFIRST_INIT;
-//  huart5.AdvancedInit.MSBFirst = UART_ADVFEATURE_MSBFIRST_ENABLE;
+  huart5.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   if (HAL_UART_Init(&huart5) != HAL_OK)
   {
     Error_Handler();

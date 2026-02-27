@@ -67,7 +67,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Core/Src/../../Drivers/ICM42688P/ICM42688PSPI.h \
  ../Drivers/CMSIS/Device/ST/STM32G4xx/Include/stm32g491xx.h \
  ../Core/Src/../../Drivers/MS5607/MS5607SPI.h \
- C:/Users/Joel/VSCode/FSW_CanSat/Ashlee's\ Repo/CanSat2025_FSW/Drivers/ICM42688P/ICM42688PSPI.h \
+ C:/Users/Joel/VSCode/CanSat\ 24-25/2025-Code/Drivers/ICM42688P/ICM42688PSPI.h \
  ../Core/Src/../../Drivers/BMM150/BMM150SPI.h \
  ../Core/Src/../../Drivers/BMM150/bmm150.h \
  ../Core/Src/../../Drivers/BMM150/bmm150_def.h \
@@ -146,7 +146,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Src/../../Drivers/ICM42688P/ICM42688PSPI.h:
 ../Drivers/CMSIS/Device/ST/STM32G4xx/Include/stm32g491xx.h:
 ../Core/Src/../../Drivers/MS5607/MS5607SPI.h:
-C:/Users/Joel/VSCode/FSW_CanSat/Ashlee's\ Repo/CanSat2025_FSW/Drivers/ICM42688P/ICM42688PSPI.h:
+C:/Users/Joel/VSCode/CanSat\ 24-25/2025-Code/Drivers/ICM42688P/ICM42688PSPI.h:
 ../Core/Src/../../Drivers/BMM150/BMM150SPI.h:
 ../Core/Src/../../Drivers/BMM150/bmm150.h:
 ../Core/Src/../../Drivers/BMM150/bmm150_def.h:
