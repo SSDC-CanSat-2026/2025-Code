@@ -47,6 +47,8 @@ extern LC76G_gps_data gps_data;
 
 typedef struct
 {
+	uint32_t time_ms;   // milliseconds since midnight
+	char gps_time[8];
     uint8_t fix_quality;
     uint8_t num_satellites;
     float hdop;
@@ -66,6 +68,11 @@ int parse_gga(char *sentence, GGA_Data_t *out);
 /* Helper functions */
 //double convert_to_double(char string_double[]);
 //uint8_t convert_to_integer(char string_int[]);
+void time_to_string(uint32_t time_ms, char *out); // This is also used for MISSION_TIME
+
+/* Private helpers */
+static uint32_t parse_gps_str_time_ms(const char *s);
 static float nmea_to_decimal(char *coord, char dir);
+static float fast_atof(const char *s);
 
 #endif /* _LC76G_H_ */

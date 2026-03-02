@@ -9,9 +9,9 @@ static SPI_HandleTypeDef *hspi;
 static GPIO_TypeDef *ChipSelect_GPIO_Port;
 static uint16_t ChipSelect_Pin;
 
-volatile static int16_t gyro_old_r = 0;
+volatile static int16_t gyro_old_x = 0;
 volatile static int16_t gyro_old_y = 0;
-volatile static int16_t gyro_old_p = 0;
+volatile static int16_t gyro_old_z = 0;
 volatile static uint32_t old_time = 0;
 
 static void ICM42688P_disable_chip_select()
@@ -65,37 +65,40 @@ uint8_t ICM42688P_init(SPI_TypeDef *spi_handle, GPIO_TypeDef *chip_select_port, 
     
     HAL_Delay(100);
 
-    ICM42688P_write_reg(0x50, (0b00000110)); // Set tolerance to +/- 2g
+    ICM42688P_write_reg(0x50, (0b00000110)); // Set FSR (Full Scale Range) to +/- 16g
 
     ICM42688P_write_reg(0x4E, (0b11 << 2) | (0b11 << 0)); // Enable gyro & accelerometer
+
+    HAL_Delay(1); // PWR_MGMT0 register requires a small delay when changing the gyro or accelerometer from off to any mode.
+
     ICM42688P_write_reg(0x7B, (0b10 << 1));               // Enable CLKIN
 
     return 0;
 }
 
-int16_t Get_Accel_P(int16_t gyro_p, uint32_t time)
-{
-    return (gyro_old_p - gyro_p); // add timer later / (old_time - time);
-}
-
-int16_t Get_Accel_Y(int16_t gyro_y, uint32_t time)
-{
-    return (gyro_old_y - gyro_y); // add timer later / (old_time - time);
-}
-
-int16_t Get_Accel_R(int16_t gyro_r, uint32_t time)
-{
-    return (gyro_old_r - gyro_r); // add timer later / (old_time - time);
-}
+//int16_t Get_Accel_P(int16_t gyro_p, uint32_t time)
+//{
+//    return (gyro_old_p - gyro_p); // add timer later / (old_time - time);
+//}
+//
+//int16_t Get_Accel_Y(int16_t gyro_y, uint32_t time)
+//{
+//    return (gyro_old_y - gyro_y); // add timer later / (old_time - time);
+//}
+//
+//int16_t Get_Accel_R(int16_t gyro_r, uint32_t time)
+//{
+//    return (gyro_old_r - gyro_r); // add timer later / (old_time - time);
+//}
 
 ICM42688P_AccelData ICM42688P_read_data()
 {
 	ICM42688P_AccelData data = {0};
 //    data.accel_z = ICM42688P_read_reg(0x23);
 
-    data.gyro_p = ICM42688P_read_reg(0x25);
+    data.gyro_x = ICM42688P_read_reg(0x25);
     data.gyro_y = ICM42688P_read_reg(0x27);
-    data.gyro_r = ICM42688P_read_reg(0x29);
+    data.gyro_z = ICM42688P_read_reg(0x29);
 
     uint32_t time = 0;
 
@@ -103,9 +106,9 @@ ICM42688P_AccelData ICM42688P_read_data()
     data.accel_y = ICM42688P_read_reg(0x21);
     data.accel_z = ICM42688P_read_reg(0x23);
 
-    gyro_old_p = data.gyro_p;
+    gyro_old_x = data.gyro_x;
     gyro_old_y = data.gyro_y;
-    gyro_old_r = data.gyro_r;
+    gyro_old_z = data.gyro_z;
     old_time = time;
 
     return data;

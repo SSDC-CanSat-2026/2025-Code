@@ -1,5 +1,7 @@
 ../Drivers/LC76G/LC76G.c:8:6:LC76G_init	8	static
-../Drivers/LC76G/LC76G.c:31:6:LC76G_test	48	static
-../Drivers/LC76G/LC76G.c:43:6:LC76G_read_data	64	static
-../Drivers/LC76G/LC76G.c:154:5:parse_gga	104	static
-../Drivers/LC76G/LC76G.c:211:14:nmea_to_decimal	32	static
+../Drivers/LC76G/LC76G.c:33:6:LC76G_test	48	static
+../Drivers/LC76G/LC76G.c:45:5:parse_gga	104	static
+../Drivers/LC76G/LC76G.c:112:6:time_to_string	32	static
+../Drivers/LC76G/LC76G.c:135:17:parse_gps_str_time_ms	32	static
+../Drivers/LC76G/LC76G.c:171:14:nmea_to_decimal	32	static
+../Drivers/LC76G/LC76G.c:188:14:fast_atof	32	static

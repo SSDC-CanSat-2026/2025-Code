@@ -94,6 +94,7 @@ TIM_HandleTypeDef htim17;
 UART_HandleTypeDef huart5;
 UART_HandleTypeDef huart3;
 DMA_HandleTypeDef hdma_uart5_rx;
+DMA_HandleTypeDef hdma_usart3_rx;
 
 osThreadId readSensorsHandle;
 osThreadId sendTelemetryHandle;
@@ -102,13 +103,16 @@ osThreadId guideNavCtrlHandle;
 osSemaphoreId globalDataHandle;
 /* USER CODE BEGIN PV */
 
-uint8_t dma_buffer[BUFFER_SIZE] = { 0 };
+uint8_t dma_buffer[BUFFER_SIZE]   = { 0 };
 char transmit_buffer[BUFFER_SIZE] = { 0 };
-char receive_buffer[BUFFER_SIZE] = { 0 };
+char receive_buffer[BUFFER_SIZE]  = { 0 };
+char command_buffer[BUFFER_SIZE]  = { 0 };
 
-uint8_t byte = 0;
-volatile uint16_t gps_size = 0;
-volatile uint8_t gps_ready = 0;
+// Flags for GPS and XBEE since they use UART DMA
+volatile uint16_t GPS_SIZE 	   = 0;
+volatile uint8_t GPS_READY 	   = 0;
+volatile uint16_t COMMAND_SIZE = 0;
+volatile uint8_t COMMAND_READY = 0;
 
 /* USER CODE END PV */
 
@@ -167,22 +171,30 @@ void process_character(char ch) { // Helper for the DMA function bellow
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 {
-    if (huart->Instance == UART5)
-    {
-    	if (!gps_ready) {
-			gps_size = size;
-			gps_ready = 1;
-    	}
-
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, dma_buffer, BUFFER_SIZE);
-        __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
-    } else {
-    	HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+  if (huart->Instance == UART5)
+  {
+    if (!GPS_READY) {
+    GPS_SIZE = size;
+    GPS_READY = 1;
+    memcpy(receive_buffer, dma_buffer, size);
     }
+  } else if (huart->Instance == USART3) {
+    if (!COMMAND_READY) {
+      COMMAND_SIZE = size;
+      COMMAND_READY = 1;
+      memcpy(command_buffer, dma_buffer, size);
+    }
+  } else {
+    // FIXME : Change this for a DBG LED in the new code
+    HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+  }
+
+  HAL_UARTEx_ReceiveToIdle_DMA(huart, dma_buffer, BUFFER_SIZE);
+  __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
 }
 
 void HAL_UARTEx_ErrorCallback(UART_HandleTypeDef *huart) {
-	while(1) {
+	for (int i = 0; i < 5; i++) {
 		// 1 quick 2 slow to show a UART error
 		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
 		HAL_Delay(100);
@@ -271,6 +283,17 @@ int main(void)
   __HAL_UART_CLEAR_NEFLAG(&huart5);
   __HAL_UART_CLEAR_PEFLAG(&huart5);
 
+  // Fully reset UART3 peripheral
+  __HAL_RCC_USART3_FORCE_RESET();
+  __HAL_RCC_USART3_RELEASE_RESET();
+  MX_USART3_UART_Init();   // reinitialize UART
+
+  // Clear all flags
+  __HAL_UART_CLEAR_OREFLAG(&huart3);
+  __HAL_UART_CLEAR_FEFLAG(&huart3);
+  __HAL_UART_CLEAR_NEFLAG(&huart3);
+  __HAL_UART_CLEAR_PEFLAG(&huart3);
+
   // Start DMA
 //  HAL_UARTEx_ReceiveToIdle_DMA(&huart5, dma_buffer, BUFFER_SIZE);
 //  __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT);
@@ -313,6 +336,7 @@ int main(void)
 
 
 
+  // UART 5
   // Check if ORE flag is set, which can happen if data is present on UART RX line
   if (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_ORE)) {
     __HAL_UART_CLEAR_FLAG(&huart5, UART_CLEAR_OREF);
@@ -320,7 +344,15 @@ int main(void)
   // receive until idle, then trigger interrupt
   HAL_UARTEx_ReceiveToIdle_DMA(&huart5, dma_buffer, BUFFER_SIZE); // receive until idle, then trigger interrupt
   __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT); // Disables "Half Transfer" interrupt
-//  __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_TC); // Disables "Transfer Complete" interrupt
+
+  // USART 3
+  // Check if ORE flag is set, which can happen if data is present on UART RX line
+  if (__HAL_UART_GET_FLAG(&huart3, UART_FLAG_ORE)) {
+    __HAL_UART_CLEAR_FLAG(&huart3, UART_CLEAR_OREF);
+  }
+  // receive until idle, then trigger interrupt
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart3, dma_buffer, BUFFER_SIZE); // receive until idle, then trigger interrupt
+  __HAL_DMA_DISABLE_IT(huart3.hdmarx, DMA_IT_HT); // Disables "Half Transfer" interrupt
 
 //  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
   /* USER CODE END 2 */
@@ -1253,6 +1285,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel1_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* DMA1_Channel2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
 
 }
 
@@ -1358,6 +1393,32 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+// Parse the time string sent from the GCS
+uint32_t parse_str_time_ms(const char *s) {
+    if (!s || s[0] == '\0')
+        return 0;
+
+    // hh
+    uint32_t hours =
+        (s[0] - '0') * 10 +
+        (s[1] - '0');
+    // Skip ':' at s[2]
+    // mm
+    uint32_t minutes =
+        (s[3] - '0') * 10 +
+        (s[4] - '0');
+    // Skip ':' at s[5]
+    // ss
+    uint32_t seconds =
+        (s[6] - '0') * 10 +
+        (s[7] - '0');
+
+    return
+        hours   * 3600000UL +
+        minutes * 60000UL +
+        seconds * 1000UL;
+}
 
 /* USER CODE END 4 */
 
@@ -1475,8 +1536,8 @@ void StartReadSensors(void const * argument)
 	  global_mission_data.VOLTAGE = (float)(battery_mV) / 1000.0; // convert from mV to V
 
 	  // read gyro data
-	  global_mission_data.GYRO_R = imu_data.gyro_r;
-	  global_mission_data.GYRO_P = imu_data.gyro_p;
+	  global_mission_data.GYRO_R = imu_data.gyro_z;
+	  global_mission_data.GYRO_P = imu_data.gyro_x;
 	  global_mission_data.GYRO_Y = imu_data.gyro_y;
 
 	  // calculates the auto gyro rotation rate in degrees per second according to:
@@ -1569,6 +1630,7 @@ void StartSendTelemetry(void const * argument)
   {
 	  if (telemetry_enable)
 	  {
+		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
 //		 HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
 		stat = osSemaphoreWait(globalDataHandle, 100);
 		if (stat != osOK) {
@@ -1581,11 +1643,15 @@ void StartSendTelemetry(void const * argument)
 		char telemetry_string[200];
 		uint16_t str_len = 0;
 
+		// Convert mission time from milliseconds to a string format
+		char mission_time[8];
+		time_to_string(global_mission_data.MISSION_TIME, &mission_time);
 
 		// fill the buffer with the first half of the packet
-		str_len = sprintf(telemetry_string, "%d,%s,%ld,%c,%s,%3.1f,%.1f,%.1f,%.1f,%d,%d,%d",
+//		str_len = sprintf(telemetry_string, "%d,%s,%ld,%c,%s,%3.1f,%.1f,%.1f,%.1f,%d,%d,%d",
+		str_len = sprintf(telemetry_string, "%d,%s,%ld,%c,%s,%3.1f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%.1f,%.1f,%.1f,%d,%s,%.1f,%.4f,%.4f,%d,%s",
 						  global_mission_data.TEAM_ID,      // team id (3174)
-						  global_mission_data.MISSION_TIME, // mission time
+						  mission_time, 					// mission time converted to a string
 						  global_mission_data.PACKET_COUNT, // packet count
 						  global_mission_data.MODE,         // mode
 						  global_mission_data.STATE,        // state
@@ -1595,15 +1661,15 @@ void StartSendTelemetry(void const * argument)
 						  global_mission_data.VOLTAGE,      // battery voltage (V)
 						  global_mission_data.GYRO_R,       // gyro roll (degrees/s)
 						  global_mission_data.GYRO_P,       // gyro pitch (degrees/s)
-						  global_mission_data.GYRO_Y        // gyro yaw (degrees/s)
-		);
+						  global_mission_data.GYRO_Y,        // gyro yaw (degrees/s)
+//		);
 		// str_len = sizeof(telemetry_string);
 		// send the first part of the packet over UART
 //		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
-		// clear the buffer
-		memset(telemetry_string, 0, sizeof(telemetry_string));
-		// fill the buffer with the second half of the packet
-		str_len = sprintf(telemetry_string, ",%d,%d,%d,%.1f,%.1f,%.1f,%d,%s,%.1f,%.4f,%.4f,%d,%s",
+//		// clear the buffer
+//		memset(telemetry_string, 0, sizeof(telemetry_string));
+//		// fill the buffer with the second half of the packet
+//		str_len = sprintf(telemetry_string, ",%d,%d,%d,%.1f,%.1f,%.1f,%d,%s,%.1f,%.4f,%.4f,%d,%s",
 						  global_mission_data.ACCEL_R,                 // accelerometer roll (degrees/s^2)
 						  global_mission_data.ACCEL_P,                 // accelerometer pitch (degrees/s^2)
 						  global_mission_data.ACCEL_Y,                 // accelerometer yaw (degrees/s^2)
@@ -1619,7 +1685,7 @@ void StartSendTelemetry(void const * argument)
 						  global_mission_data.CMD_ECHO                 // tracks previously received command
 		);
 		// send the second half of the packet over UART
-//		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
+		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
 
 		/*char test_string[30];
 		str_len = sprintf(test_string, "accel_z: %d", imu_data.accel_z);
@@ -1627,15 +1693,14 @@ void StartSendTelemetry(void const * argument)
 
 		// increment packet count once the entire packet has been transmitted
 		global_mission_data.PACKET_COUNT = global_mission_data.PACKET_COUNT + 1;
-
-    // Commented for GPS testing
-		 HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-		 osDelay(100);
-		 HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+		// Since this is ~1/sec just add 1000 msec to mission time
+		global_mission_data.MISSION_TIME = global_mission_data.MISSION_TIME + 1000;
 
 		osSemaphoreRelease(globalDataHandle);
 
 	  osDelay(1000);
+	  } else {
+		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 	  }
   } // END FOR LOOP
 
@@ -1661,7 +1726,11 @@ void StartReadCommands(void const * argument)
   for(;;)
   {
 	  // receive command (22 bytes max)
-	      uint8_t rx_buff[23];
+	      // Now uses "command_buffer" from DMA
+	  	  if (!COMMAND_READY) {
+	  		  osThreadYield();
+	  		  continue;
+	  	  }
 
 	      stat = osSemaphoreWait(globalDataHandle, 100);
 		  if (stat != osOK) {
@@ -1669,15 +1738,15 @@ void StartReadCommands(void const * argument)
 			  continue;
 		  }
 
-//	      HAL_UART_Receive_IT(&huart3, rx_buff, 22); FIXME : Un-comment this line
-	      // HAL_UART_Transmit(&huart3, rx_buff, sizeof(rx_buff), HAL_MAX_DELAY);
+//	       HAL_UART_Transmit(&huart3, command_buffer, COMMAND_SIZE, HAL_MAX_DELAY);
 
 	      // step1: convert rx_buff array of "uint8_t"s into array of "chars"
-	      char *char_array = (char *)rx_buff;
-	      char rx_string[22];
+	      char rx_string[23];
 
 	      // step2: convert array of chars into string  (https://www.geeksforgeeks.org/convert-character-array-to-string-in-c/)
-	      strncpy(rx_string, char_array, 22);
+	      strncpy(rx_string, command_buffer, 22);
+	      memset(command_buffer, 0, BUFFER_SIZE);
+	      COMMAND_READY = 0; // Done with the DMA buffer and can now signal a ready state for a new command.
 	      // strcpy(global_mission_data.CMD_ECHO, rx_string);
 
 	      // Add null terminator to end of command string
@@ -1717,13 +1786,9 @@ void StartReadCommands(void const * argument)
 	        // if a manual timestamp has been input...
 	        if (strlen(arg) == 8)
 	        {
-	          // set mission time
-	          char *str_end;
-	          strncpy(global_mission_data.MISSION_TIME, time_str, 9);
-	          // Set a flag telling us to update the RTC
-	          update_time = 1;
-	          // stop reading time from GPS
-	          gps_time_enable = 0;
+	            // set mission time
+	        	global_mission_data.MISSION_TIME = parse_str_time_ms(time_str);
+	        	// Time is stored as milliseconds and converted for data transmission
 	        }
 	        // read time from GPS
 	        else if (strncmp(time_str, "GPS", 3))
@@ -1733,7 +1798,7 @@ void StartReadCommands(void const * argument)
 	        else
 	        {
 	          // if the string is not 8 characters long, set it to "00:00:00"
-	          strcpy(global_mission_data.MISSION_TIME, "00:00:00");
+	          global_mission_data.MISSION_TIME = 0;
 	          gps_time_enable = 0;
 	        }
 	        // set command echo
@@ -1818,12 +1883,12 @@ void StartReadCommands(void const * argument)
 	        char c_echo[] = "MECOFF";
 	        strcpy(global_mission_data.CMD_ECHO, c_echo);
 	      }
-	      // FIXME : Probably don't need an ELSE statement
-//	      else
-//	      {
-//	      }
-	      // clear command buffer
-	      memset(rx_buff, 0, sizeof(rx_buff));
+//	       FIXME : Probably don't need an ELSE statement
+	      else
+	      {
+	    	  // Probably don't want to keep this in final version, but good for testing
+	    	  strcpy(global_mission_data.CMD_ECHO,"INVALID");
+	      }
 	      osSemaphoreRelease(globalDataHandle);
 		  osThreadYield();
   } // END OF FOR LOOP
@@ -1851,9 +1916,8 @@ void StartGNC(void const * argument)
   {
 	  // This IF statement should be all that is needed to parse GPS data.
 	  // Need to test though, apparently finding time to be outside to test it is harder than I thought.
-	  if (gps_ready) {
-		  gps_ready = 0;
-		  memcpy(receive_buffer, dma_buffer, gps_size);
+	  if (GPS_READY) {
+		  GPS_READY = 0;
 		  char output[200] = { '\0' };
 		  // The input should be a GNGGA message, but always check just in case
 		  if (strncmp(receive_buffer, "$GNGGA", 6) != 0) {
@@ -1863,18 +1927,27 @@ void StartGNC(void const * argument)
 		  }
 		  // Parse the receive buffer for the GGA data.
 		  int ret = parse_gga(&receive_buffer, &data);
+		  time_to_string(data.time_ms, &data.gps_time);
 		  // sprintf and huart3 transmit for testing purposes only.
-//		  int strlen = sprintf(output, "GPS data:\nFix Qual: [%d]\nNum Sats: [%d]\nHDOP: [%0.4f]\nLAT: [%0.4f]\tLON: [%0.4f]\tALT: [%0.4f]\n", data.fix_quality, data.num_satellites, data.hdop, data.latitude, data.longitude, data.altitude);
+//		  int strlen = sprintf(output, "GPS data:\nTime: [%s]\nLAT: [%0.4f]\tLON: [%0.4f]\tALT: [%0.4f]\n", data.gps_time, data.longitude, data.altitude);
 //		  HAL_UART_Transmit(&huart3, output, strlen, HAL_MAX_DELAY);
 
 		  // Now copy data into the global_data struct.
-//		  stat = osSemaphoreWait(globalDataHandle, 100);
-//		  if (stat != osOK) {
-//			  osThreadYield();
-//			  continue;
-//		  }
-//
-//		  osSemaphoreRelease(globalDataHandle);
+		  stat = osSemaphoreWait(globalDataHandle, 100);
+		  if (stat != osOK) {
+			  osThreadYield();
+			  continue;
+		  }
+		  if (gps_time_enable) {
+			  global_mission_data.MISSION_TIME = data.time_ms;
+			  gps_time_enable = 0; // It is only *set* by the GPS
+		  }
+		  global_mission_data.GPS_ALTITUDE = data.altitude;
+		  global_mission_data.GPS_LATITUDE = data.latitude;
+		  global_mission_data.GPS_LONGITUDE = data.longitude;
+		  global_mission_data.GPS_SATS = data.num_satellites;
+		  strcpy(global_mission_data.GPS_TIME, data.gps_time);
+		  osSemaphoreRelease(globalDataHandle);
 		  memset(receive_buffer, 0, sizeof(receive_buffer));
 	  }
 	  osThreadYield();

@@ -17,13 +17,14 @@ typedef struct ICM42688P_AccelData
 	int16_t accel_y;
 	int16_t accel_z;
 
+	// FIXME : Need to redefine what RPY is based on new mount position of sensor
     int16_t accel_pitch;
     int16_t accel_yaw;
     int16_t accel_roll;
 
-    int16_t gyro_p;
+    int16_t gyro_x;
     int16_t gyro_y;
-    int16_t gyro_r;
+    int16_t gyro_z;
 } ICM42688P_AccelData;
 
 int16_t ICM42688P_read_reg(uint8_t reg);

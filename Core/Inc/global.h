@@ -29,7 +29,7 @@ extern volatile double simulated_pressure;
 typedef struct
 {
 	int16_t TEAM_ID;
-	char MISSION_TIME[9]; // store as seconds since midnight, decode later
+	uint32_t MISSION_TIME; // Time in milliseconds, converted using function in LC76G driver
 	uint32_t PACKET_COUNT;
 	char MODE;
 	char STATE[STATE_TEXT_LEN];
