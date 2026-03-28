@@ -9,9 +9,9 @@ static SPI_HandleTypeDef *hspi;
 static GPIO_TypeDef *ChipSelect_GPIO_Port;
 static uint16_t ChipSelect_Pin;
 
-volatile static int16_t gyro_old_x = 0;
-volatile static int16_t gyro_old_y = 0;
-volatile static int16_t gyro_old_z = 0;
+volatile static float gyro_old_x = 0;
+volatile static float gyro_old_y = 0;
+volatile static float gyro_old_z = 0;
 volatile static uint32_t old_time = 0;
 
 static void ICM42688P_disable_chip_select()
@@ -33,18 +33,21 @@ static HAL_StatusTypeDef ICM42688P_write_reg(uint8_t reg, uint8_t data)
     return HAL_OK;
 }
 
+
 int16_t ICM42688P_read_reg(uint8_t reg)
 {
     uint8_t tx[3] = { reg | 0x80, 0x00, 0x00 }; // 0x80 = read bit
-    int8_t rx[3] = {0};
+    uint8_t rx[3] = {0};
     ICM42688P_disable_chip_select();
     HAL_SPI_TransmitReceive(hspi, &tx, &rx, 3, HAL_MAX_DELAY);
     ICM42688P_enable_chip_select();
 
-    int16_t shifted = rx[1] << 8;
-    int16_t lower = rx[2];
-    int16_t value = shifted | lower;
-    return value;
+    // Read from the IMU will read 2 registers at a time.
+    // The data returned from the IMU is in 2's complement,
+    //   this means we have to handle the indiviudal bytes
+    //   as unsigned integers and only cast to a signed
+    //   integer when returning
+    return (int16_t)((rx[1] << 8) | rx[0]);
 }
 
 uint8_t ICM42688P_init(SPI_TypeDef *spi_handle, GPIO_TypeDef *chip_select_port, uint16_t chip_select_gpio_pin)
@@ -94,17 +97,16 @@ uint8_t ICM42688P_init(SPI_TypeDef *spi_handle, GPIO_TypeDef *chip_select_port, 
 ICM42688P_AccelData ICM42688P_read_data()
 {
 	ICM42688P_AccelData data = {0};
-//    data.accel_z = ICM42688P_read_reg(0x23);
 
-    data.gyro_x = ICM42688P_read_reg(0x25);
-    data.gyro_y = ICM42688P_read_reg(0x27);
-    data.gyro_z = ICM42688P_read_reg(0x29);
+    data.gyro_x = ((float)ICM42688P_read_reg(0x25) / GYRO_SENSITIVITY) * GYRO_CONVERT;
+    data.gyro_y = ((float)ICM42688P_read_reg(0x27) / GYRO_SENSITIVITY) * GYRO_CONVERT;
+    data.gyro_z = ((float)ICM42688P_read_reg(0x29) / GYRO_SENSITIVITY) * GYRO_CONVERT;
 
     uint32_t time = 0;
 
-    data.accel_x = ICM42688P_read_reg(0x1F);
-    data.accel_y = ICM42688P_read_reg(0x21);
-    data.accel_z = ICM42688P_read_reg(0x23);
+    data.accel_x = ((float)ICM42688P_read_reg(0x1F) / ACCEL_SENSITIVITY) * ACCEL_CONVERT;
+    data.accel_y = ((float)ICM42688P_read_reg(0x21) / ACCEL_SENSITIVITY) * ACCEL_CONVERT;
+    data.accel_z = ((float)ICM42688P_read_reg(0x23) / ACCEL_SENSITIVITY) * ACCEL_CONVERT;
 
     gyro_old_x = data.gyro_x;
     gyro_old_y = data.gyro_y;

@@ -7,14 +7,24 @@
 
 #include "global.h"
 
+// Flags
 // TODO: make this false before any demonstrations
-volatile uint8_t telemetry_enable = 0;
-volatile uint8_t gps_time_enable = 1;
-volatile uint8_t is_calibrated = 0;
-volatile uint8_t mec_wire_enable = 0;
-volatile uint8_t simulation_enable = 0;
-volatile uint8_t simulation_pre = 0;
-volatile double simulated_pressure = 0.0;
+volatile uint8_t telemetry_enable	= 1;
+volatile uint8_t gps_time_enable	= 0;
+volatile uint8_t is_calibrated		= 0;
+volatile uint8_t mec_wire_enable	= 0;
+volatile uint8_t simulation_enable	= 0;
+volatile uint8_t drop_egg_enable	= 0;
+volatile uint8_t simulation_pre 	= 0;
+volatile double simulated_pressure 	= 0.0;
+
+// Flight State FSM variables
+const	float	launch_altitude_threshold	= 50.0;
+const	float	release_height_percentage	= 0.80;
+const	float	release_height_tolerance	= 0.10;
+const	float	egg_drop_height				= 5.0;
+volatile float	max_altitude				= 0.0;
+volatile float 	altitude_history[3]			= {0.0,0.0,0.0};
 
 Mission_Data global_mission_data = {0};
 

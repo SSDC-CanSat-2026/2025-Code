@@ -15,7 +15,7 @@
 HAL_StatusTypeDef BQ28Z610_ReadVoltage(I2C_HandleTypeDef *hi2c, uint16_t *voltage)
 {
 	uint8_t rx[2];
-	HAL_StatusTypeDef status = HAL_I2C_Mem_Read(hi2c, BQ28Z610_I2C_ADDR, CMD_VOLTAGE, I2C_MEMADD_SIZE_8BIT, rx, 2, HAL_MAX_DELAY);
+	HAL_StatusTypeDef status = HAL_I2C_Mem_Read(hi2c, (BQ28Z610_I2C_ADDR | 0x1), CMD_VOLTAGE, I2C_MEMADD_SIZE_8BIT, rx, 2, HAL_MAX_DELAY);
 
 	if (status == HAL_OK)
 	{

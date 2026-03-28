@@ -10,5 +10,4 @@
 ../Drivers/MS5607/MS5607SPI.c:314:6:disableCSB	1
 ../Drivers/MS5607/MS5607SPI.c:320:6:MS5607SetTemperatureOSR	1
 ../Drivers/MS5607/MS5607SPI.c:326:6:MS5607SetPressureOSR	1
-../Drivers/MS5607/MS5607SPI.c:360:7:calculateAltitude	2
-../Drivers/MS5607/MS5607SPI.c:380:6:determineState	13
+../Drivers/MS5607/MS5607SPI.c:349:7:calculateAltitude	2

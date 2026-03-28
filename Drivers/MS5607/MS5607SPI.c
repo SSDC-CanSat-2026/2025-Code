@@ -331,17 +331,6 @@ void MS5607SetPressureOSR(MS5607OSRFactors pOSR)
 /*
   AltitudeCalculations.c START HERE
 */
-float const lower_altitude_threshold = 20.0;
-
-// Index is by seconds ago the value was calculated
-float altitude_history[] = {0, 0, 0};
-
-float max_altitude = 0.0;
-float apogee_base_ratio = 0.75; 
-float apogee_difference_ratio = 0.00;
-float const apogee_offset_height = 15.00;
-
-float calibrated_atitude = 0.00;
 
 /*
 Units
@@ -373,49 +362,4 @@ float calculateAltitude(double pressure) {
       altitude_history[0] = h_meter - global_mission_data.ALTITUDE_OFFSET;
 	}
   return h_meter - global_mission_data.ALTITUDE_OFFSET;
-}
-
-// Idea is to calculateAltitude then immediately call this function
-// to detemrine state.
-void determineState(double altitude){
-    // LAUNCH_PAD state
-    if (strcmp(global_mission_data.STATE, "LAUNCH_PAD") == 0) {
-        if (altitude > lower_altitude_threshold) {
-            char _state[] = "ASCENT";
-            memcpy(global_mission_data.STATE, _state, sizeof(_state));
-        }
-    }
-    else if (strcmp(global_mission_data.STATE, "ASCENT") == 0) {
-        if (altitude > max_altitude) max_altitude = altitude;
-        apogee_difference_ratio = 0;
-
-        if (fmax(altitude_history[0], altitude_history[1]) < max_altitude - 15) {
-            mec_wire_enable = 1;
-
-            char _state[] = "APOGEE";
-            memcpy(global_mission_data.STATE, _state, sizeof(_state));
-        }
-    }
-    else if (strcmp(global_mission_data.STATE, "APOGEE") == 0) {
-        if (altitude > max_altitude * (apogee_base_ratio + apogee_difference_ratio)) {
-            char _state[] = "DESCENT";
-            memcpy(global_mission_data.STATE, _state, sizeof(_state));
-        }
-        else if (altitude < max_altitude * (apogee_base_ratio + apogee_difference_ratio)) {
-            char _state[] = "PROBE_RELEASE";
-            memcpy(global_mission_data.STATE, _state, sizeof(_state));
-        }
-    }
-    else if (strcmp(global_mission_data.STATE, "DESCENT")) {
-        if (altitude < max_altitude * (apogee_base_ratio + apogee_difference_ratio)) {
-            char _state[] = "PROBE_RELEASE";
-            memcpy(global_mission_data.STATE, _state, sizeof(_state));
-        }
-    }
-    else if (strcmp(global_mission_data.STATE, "PROBE_RELEASE")) {
-        if (altitude < lower_altitude_threshold) {
-            char _state[] = "LANDED";
-            memcpy(global_mission_data.STATE, _state, sizeof(_state));
-        }
-    }
 }

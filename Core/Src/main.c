@@ -148,45 +148,30 @@ void StartGNC(void const * argument);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-void process_character(char ch) { // Helper for the DMA function bellow
-	static uint8_t strlen = 0;
-	switch (ch){
-	case '\f':
-		receive_buffer[strlen] = ch;
-		strlen++;
-		receive_buffer[strlen] = '\0';
-		strlen++;
-		HAL_UART_Transmit(&huart3, &receive_buffer, strlen, HAL_MAX_DELAY);
-		strlen = 0;
-		break;
-	default:
-		if (strlen < BUFFER_SIZE) {
-			HAL_UART_Transmit(&huart3, ch, 1, HAL_MAX_DELAY);
-			receive_buffer[strlen] = ch;
-			strlen++;
-		}
-		break;
-	}
-}
-
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 {
   if (huart->Instance == UART5)
   {
-    if (!GPS_READY) {
-    GPS_SIZE = size;
-    GPS_READY = 1;
-    memcpy(receive_buffer, dma_buffer, size);
+    if (!GPS_READY)
+    {
+		GPS_SIZE = size;
+		GPS_READY = 1;
+		memcpy(receive_buffer, dma_buffer, size);
     }
-  } else if (huart->Instance == USART3) {
-    if (!COMMAND_READY) {
-      COMMAND_SIZE = size;
-      COMMAND_READY = 1;
-      memcpy(command_buffer, dma_buffer, size);
+  }
+  else if (huart->Instance == USART3)
+  {
+    if (!COMMAND_READY)
+    {
+		COMMAND_SIZE = size;
+		COMMAND_READY = 1;
+memcpy(command_buffer, dma_buffer, size);
     }
-  } else {
+  }
+  else
+  {
     // FIXME : Change this for a DBG LED in the new code
-    HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
   }
 
   HAL_UARTEx_ReceiveToIdle_DMA(huart, dma_buffer, BUFFER_SIZE);
@@ -194,7 +179,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 }
 
 void HAL_UARTEx_ErrorCallback(UART_HandleTypeDef *huart) {
-	for (int i = 0; i < 5; i++) {
+	while(1) {
 		// 1 quick 2 slow to show a UART error
 		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
 		HAL_Delay(100);
@@ -210,8 +195,6 @@ void HAL_UARTEx_ErrorCallback(UART_HandleTypeDef *huart) {
 		HAL_Delay(200);
 	}
 }
-
-//	HardFault_Handler(); // FIXME : If this is still necessary by comp, just remove the call to the HardFault
 
 /* USER CODE END 0 */
 
@@ -265,8 +248,15 @@ int main(void)
   // Feedback LED
   HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 
+  // Disable ALL chip selects
+  HAL_GPIO_WritePin(IMU_nCS_GPIO_Port, IMU_nCS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(BMP_nCS_GPIO_Port, BMP_nCS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(MAG_nCS_GPIO_Port, MAG_nCS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(MAGEXT_nCS_GPIO_Port, MAGEXT_nCS_Pin, GPIO_PIN_SET);
+
   // Enable XBEE
   HAL_GPIO_WritePin(XBEE_RST_GPIO_Port, XBEE_RST_Pin, GPIO_PIN_SET);
+  HAL_Delay(500);
 
   // Hold GPS in reset (LOW)
   HAL_GPIO_WritePin(GPS_RST_GPIO_Port, GPS_RST_Pin, GPIO_PIN_RESET);
@@ -294,21 +284,9 @@ int main(void)
   __HAL_UART_CLEAR_NEFLAG(&huart3);
   __HAL_UART_CLEAR_PEFLAG(&huart3);
 
-  // Start DMA
-//  HAL_UARTEx_ReceiveToIdle_DMA(&huart5, dma_buffer, BUFFER_SIZE);
-//  __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT);
-
   // Now release GPS reset
   HAL_GPIO_WritePin(GPS_RST_GPIO_Port, GPS_RST_Pin, GPIO_PIN_SET);
   HAL_Delay(5000);
-
-
-
-  // Disable ALL chip selects
-  HAL_GPIO_WritePin(IMU_nCS_GPIO_Port, IMU_nCS_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(BMP_nCS_GPIO_Port, BMP_nCS_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(MAG_nCS_GPIO_Port, MAG_nCS_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(MAGEXT_nCS_GPIO_Port, MAGEXT_nCS_Pin, GPIO_PIN_SET);
 
   // Initialize IMU
   ICM42688P_init(&hspi2, IMU_nCS_GPIO_Port, IMU_nCS_Pin);
@@ -320,8 +298,7 @@ int main(void)
   struct bmm150_dev bmm150 = BMM150_spi_init(&hspi2, MAG_nCS_GPIO_Port, MAG_nCS_Pin);
 
   // Initialize LC76G
-  LC76G_init();
-  HAL_Delay(1000); // Ignore PAIR001 acks
+  LC76G_init(&huart5);
 
   // Initializing AMT10E2
   QENC_Init_Encoder0();
@@ -330,11 +307,10 @@ int main(void)
 
   init_mission_data();
 
-//  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-//  osDelay(100);
-//  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
-
-
+  // Flash LED to signal INITs are done
+  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+  HAL_Delay(300);
+  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 
   // UART 5
   // Check if ORE flag is set, which can happen if data is present on UART RX line
@@ -1394,7 +1370,12 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-// Parse the time string sent from the GCS
+/* ------------------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                 This code block is to be used for any helper functions for anything other than a driver                                 */
+/* ------------------------------------------------------------------------------------------------------------------------------------------------------- */
+
+// Parse a time string in format HH:MM:SS into uint32 milliseconds
+// This is technically a 24 hour format conversion
 uint32_t parse_str_time_ms(const char *s) {
     if (!s || s[0] == '\0')
         return 0;
@@ -1420,6 +1401,57 @@ uint32_t parse_str_time_ms(const char *s) {
         seconds * 1000UL;
 }
 
+// Idea is to calculateAltitude then immediately call this function to detemrine state.
+void determineState(double altitude){
+    // LAUNCH_PAD state
+    if (strcmp(global_mission_data.STATE, "LAUNCH_PAD") == 0)
+    {
+        if (altitude > launch_altitude_threshold) {
+            char _state[] = "ASCENT";
+            memcpy(global_mission_data.STATE, _state, sizeof(_state));
+        }
+    }
+    else if (strcmp(global_mission_data.STATE, "ASCENT") == 0)
+    {
+        if (altitude > max_altitude)
+        	max_altitude = altitude;
+
+        if (fmax(fmax(altitude_history[0], altitude_history[1]), altitude_history[2]) == altitude_history[0]) {
+            mec_wire_enable = 1;
+
+            char _state[] = "APOGEE";
+            memcpy(global_mission_data.STATE, _state, sizeof(_state));
+        }
+    }
+    else if (strcmp(global_mission_data.STATE, "APOGEE") == 0)
+    {
+    	char _state[] = "DESCENT";
+    	memcpy(global_mission_data.STATE, _state, sizeof(_state));
+    }
+    else if (strcmp(global_mission_data.STATE, "DESCENT") == 0)
+    {
+    	if (altitude < (max_altitude * release_height_percentage)) {
+    		char _state = "PROBE_RELEASE";
+    	}
+    }
+    else if (strcmp(global_mission_data.STATE, "PROBE_RELEASE") == 0)
+    {
+    	if (altitude <= egg_drop_height) {
+			drop_egg_enable = 1;
+			char _state[] = "PAYLOAD_RELEASE";
+			memcpy(global_mission_data.STATE, _state, sizeof(_state));
+		}
+    }
+    else if (strcmp(global_mission_data.STATE, "PAYLOAD_RELEASE") == 0)
+    {
+    	char _state[] = "LANDED";
+    	memcpy(global_mission_data.STATE, _state, sizeof(_state));
+    }
+}
+
+/* -------------------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                                 START THREAD DEFINITIONS                                                                 */
+/* -------------------------------------------------------------------------------------------------------------------------------------------------------- */
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartReadSensors */
@@ -1438,7 +1470,6 @@ void StartReadSensors(void const * argument)
   volatile MS5607Readings bmp_data;      // pressure data
   volatile ICM42688P_AccelData imu_data; // accelerometer / gyro data
   volatile BMM150_mag_data mag_data;     // DELETE: magnetometer data (unused)
-  volatile LC76G_gps_data gps_data;      // GPS data
 
   // Holds the number of quadrature encoder revolutions measured in the
   // previous and current telemetry packet, respectively (used to calculate
@@ -1447,6 +1478,7 @@ void StartReadSensors(void const * argument)
   volatile int16_t enc_count = 0;
 
   osStatus stat = osErrorOS;
+  GGA_Data_t gps_data;
 
 
   volatile uint8_t gps_array_check[83] = {0};
@@ -1454,47 +1486,6 @@ void StartReadSensors(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-//	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-	  bmp_data = MS5607ReadValues();
-	  // read IMU values
-	  imu_data = ICM42688P_read_data();
-	  // DELETE: broken/unused sensor data
-	  // mag_data = BMM150_read_mag_data(&bmm150);
-//	  gps_data = LC76G_read_data();
-
-//	  LC76G_test(&huart5);
-
-//	  char test_msg[] = "$PAIR865,0,0*31\r\n";
-	  //	char buf[256];
-
-//      HAL_UART_Transmit(&huart5, &test_msg, sizeof(test_msg)-1, HAL_MAX_DELAY);
-//	  HAL_UART_Receive_IT(&huart5, &byte, 1);
-//	  HAL_UART_Transmit(&huart3, &byte, 1, HAL_MAX_DELAY);
-
-//	  if (gps_data.time_H) {
-//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-//		  osDelay(100);
-//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
-//		  osDelay(100);
-//	  }
-
-
-//	  char buff[39];
-//	  LC76G_test(&buff, &huart5);
-//	  HAL_UART_Transmit(&huart3, &buff, 39, HAL_MAX_DELAY);
-//	  HAL_UART_Transmit(&huart5, &dma_buffer, BUFFER_SIZE, HAL_MAX_DELAY);
-//	  if (receive_buffer[0] == '\0') {
-//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-//		  osDelay(100);
-//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
-//	  } else {
-//		  HAL_UART_Transmit(&huart3, &dma_buffer, BUFFER_SIZE, HAL_MAX_DELAY);
-//		  memset(receive_buffer, 0, sizeof(receive_buffer));
-//	  }
-
-	  osDelay(1000);
-
-
 //	  HAL_UART_Transmit(&huart3, gps_data.sats, 3, HAL_MAX_DELAY);
 	  // read quadrature encoder values
 	  enc_count = QENC_Get_Encoder0_Count();
@@ -1504,6 +1495,8 @@ void StartReadSensors(void const * argument)
 		  osThreadYield();
 		  continue;
 	  }
+
+	  bmp_data = MS5607ReadValues();
 
 	  // record sensor data into the global mission data struct
 	  global_mission_data.TEMPERATURE = bmp_data.temperature_C;
@@ -1535,16 +1528,18 @@ void StartReadSensors(void const * argument)
 	  BQ28Z610_ReadVoltage(&hi2c3, &battery_mV);                  // read battery voltage from BQZ
 	  global_mission_data.VOLTAGE = (float)(battery_mV) / 1000.0; // convert from mV to V
 
+	  imu_data = ICM42688P_read_data();
 	  // read gyro data
-	  global_mission_data.GYRO_R = imu_data.gyro_z;
+	  global_mission_data.GYRO_R = imu_data.gyro_y;
 	  global_mission_data.GYRO_P = imu_data.gyro_x;
-	  global_mission_data.GYRO_Y = imu_data.gyro_y;
+	  global_mission_data.GYRO_Y = imu_data.gyro_z;
 
 	  // calculates the auto gyro rotation rate in degrees per second according to:
 	  // (current count) - (previous count) * (360 degrees / 1 revolution) * (1 revolution / 120 counts)
 	  global_mission_data.AUTO_GYRO_ROTATION_RATE = (enc_count - prev_enc_count) * 3;
 
 	  // read gyro acceleration data
+	  // FIXME : IMU data is currently raw values, not angular rates
 	  global_mission_data.ACCEL_R = imu_data.accel_y;
 	  global_mission_data.ACCEL_P = imu_data.accel_x;
 	  global_mission_data.ACCEL_Y = imu_data.accel_z;
@@ -1559,54 +1554,32 @@ void StartReadSensors(void const * argument)
 	  global_mission_data.MAG_Y = mag_data.z; // mag_y
 	  */
 
-	  // update GPS data; dummy data
+	  // This IF statement should be all that is needed to parse GPS data.
+	  // Need to test though, apparently finding time to be outside to test it is harder than I thought.
+	  if (GPS_READY) {
+		  GPS_READY = 0;
+		  char output[200] = { '\0' };
+		  // The input should be a GNGGA message, but will be checked in parser function
+		  // Parse the receive buffer for the GGA data.
+		  int ret = parse_gga(&receive_buffer, &gps_data);
+		  time_to_string(gps_data.time_ms, &gps_data.gps_time);
 
+		  // Now copy data into the global_data struct.
+		  global_mission_data.GPS_ALTITUDE = gps_data.altitude;
+		  global_mission_data.GPS_LATITUDE = gps_data.latitude;
+		  global_mission_data.GPS_LONGITUDE = gps_data.longitude;
+		  global_mission_data.GPS_SATS = gps_data.num_satellites;
+		  strcpy(global_mission_data.GPS_TIME, gps_data.gps_time);
+//		  HAL_UART_Transmit(&huart3, receive_buffer, GPS_SIZE, HAL_MAX_DELAY);
+		  memset(receive_buffer, 0, sizeof(receive_buffer));
+	  }
+	  if (gps_time_enable) {
+		  global_mission_data.MISSION_TIME = gps_data.time_ms;
+		  gps_time_enable = 0; // It is only *set* by the GPS or by default in global.c
+	  }
 
-//	  if (gps_data.time_H != 0 && gps_data.time_S != 0 && gps_data.time_S != 0) {
-//		  sprintf(global_mission_data.GPS_TIME, "%d:%d:%d", gps_data.time_H, gps_data.time_M, gps_data.time_S);
-//	  } else if (gps_data.time_H != 0) {
-//		  sprintf(global_mission_data.GPS_TIME, "%d:XX:XX", gps_data.time_H);
-//	  } else if (gps_data.time_M != 0) {
-//		  sprintf(global_mission_data.GPS_TIME, "XX:%d:XX", gps_data.time_M);
-//	  } else if (gps_data.time_S != 0) {
-//		  sprintf(global_mission_data.GPS_TIME, "XX:XX:%d", gps_data.time_S);
-//	  }
-//	  if (gps_data.altitude != 0) {
-//		  global_mission_data.GPS_ALTITUDE = gps_data.altitude;
-//	  }
-//	  if (gps_data.lat != 0) {
-//		  global_mission_data.GPS_LATITUDE = gps_data.lat;
-//	  }
-//	  if (gps_data.lon != 0) {
-//		  global_mission_data.GPS_LONGITUDE = gps_data.lon;
-//	  }
-//	  if (gps_data.num_sat_used != 0) {
-//		  global_mission_data.GPS_SATS = gps_data.num_sat_used;
-//	  }
-
-//	  if (gps_data.time_H == 0 || gps_data.time_M == 0 || gps_data.time_S == 0 || gps_data.altitude == 0 || gps_data.lat == 0 || gps_data.lon == 0 || gps_data.num_sat_used == 0) {
-//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-//		  osDelay(100);
-//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
-//		  osDelay(10000);
-//	  }
-
-//	  strcpy(global_mission_data.GPS_TIME, "XX:XX:XX");
-//	  global_mission_data.GPS_ALTITUDE = calculate_abs_altitude(global_mission_data.PRESSURE) + ((rand() % 200 / 10) - 10);
-//	  global_mission_data.GPS_LATITUDE = 38.3879 + ((rand() % 20 - 10) / 1000);
-//	  global_mission_data.GPS_LONGITUDE = 79.5836 + ((rand() % 30 - 15) / 1000);
-//	  global_mission_data.GPS_SATS = rand() % 8 + 4;
-
-//	  HAL_GPIO_TogglePin(USR_LED_GPIO_Port, USR_LED_Pin);
-//	  osDelay(100);
-//	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 	  osSemaphoreRelease(globalDataHandle);
-//	  osDelay(1000);
 	  osThreadYield();
-
-//	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-//	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
-
   } // END FOR LOOP
 
   // Should never leave loop, but just in case
@@ -1630,8 +1603,7 @@ void StartSendTelemetry(void const * argument)
   {
 	  if (telemetry_enable)
 	  {
-		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-//		 HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
 		stat = osSemaphoreWait(globalDataHandle, 100);
 		if (stat != osOK) {
 			osThreadYield();
@@ -1647,44 +1619,68 @@ void StartSendTelemetry(void const * argument)
 		char mission_time[8];
 		time_to_string(global_mission_data.MISSION_TIME, &mission_time);
 
-		// fill the buffer with the first half of the packet
-//		str_len = sprintf(telemetry_string, "%d,%s,%ld,%c,%s,%3.1f,%.1f,%.1f,%.1f,%d,%d,%d",
-		str_len = sprintf(telemetry_string, "%d,%s,%ld,%c,%s,%3.1f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%.1f,%.1f,%.1f,%d,%s,%.1f,%.4f,%.4f,%d,%s",
-						  global_mission_data.TEAM_ID,      // team id (3174)
-						  mission_time, 					// mission time converted to a string
-						  global_mission_data.PACKET_COUNT, // packet count
-						  global_mission_data.MODE,         // mode
-						  global_mission_data.STATE,        // state
-						  global_mission_data.ALTITUDE,     // calibrated altitude (m)
-						  global_mission_data.TEMPERATURE,  // temperature (C)
-						  global_mission_data.PRESSURE,     // pressure (kPa)
-						  global_mission_data.VOLTAGE,      // battery voltage (V)
-						  global_mission_data.GYRO_R,       // gyro roll (degrees/s)
-						  global_mission_data.GYRO_P,       // gyro pitch (degrees/s)
-						  global_mission_data.GYRO_Y,        // gyro yaw (degrees/s)
-//		);
-		// str_len = sizeof(telemetry_string);
-		// send the first part of the packet over UART
-//		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
-//		// clear the buffer
-//		memset(telemetry_string, 0, sizeof(telemetry_string));
-//		// fill the buffer with the second half of the packet
-//		str_len = sprintf(telemetry_string, ",%d,%d,%d,%.1f,%.1f,%.1f,%d,%s,%.1f,%.4f,%.4f,%d,%s",
-						  global_mission_data.ACCEL_R,                 // accelerometer roll (degrees/s^2)
-						  global_mission_data.ACCEL_P,                 // accelerometer pitch (degrees/s^2)
-						  global_mission_data.ACCEL_Y,                 // accelerometer yaw (degrees/s^2)
-						  global_mission_data.MAG_R,                   // magnetometer roll
-						  global_mission_data.MAG_P,                   // magnetometer pitch
-						  global_mission_data.MAG_Y,                   // magnetometer yaw
-						  global_mission_data.AUTO_GYRO_ROTATION_RATE, // auto-gyro rotation rate (rps)
-						  global_mission_data.GPS_TIME,                // GPS time
-						  global_mission_data.GPS_ALTITUDE,            // GPS (absolute) altitude (m)
-						  global_mission_data.GPS_LATITUDE,            // GPS latitude
-						  global_mission_data.GPS_LONGITUDE,           // GPS longitude
-						  global_mission_data.GPS_SATS,                // # of connected GPS satellites
-						  global_mission_data.CMD_ECHO                 // tracks previously received command
+		// Test new GCS:
+		// "TEAM_ID","MISSION_TIME","PACKET_COUNT","MODE","STATE","ALTITUDE", "TEMPERATURE", "PRESSURE", "VOLTAGE","CURRENT",
+        // "GYRO_R", "GYRO_P", "GYRO_Y", "ACCEL_R", "ACCEL_P", "ACCEL_Y", "GPS_TIME", "GPS_ALTITUDE",
+		// "GPS_LATITUDE", "GPS_LONGITUDE", "GPS_SATS", "CMD_ECHO"
+//		str_len = sprintf(telemetry_string, "%d,%s,%ld,%c,%s,%3.1f,%.1f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%s,%.1f,%.4f,%.4f,%d,%s",
+//				1075,
+//				mission_time,
+//				global_mission_data.PACKET_COUNT,
+//				global_mission_data.MODE,
+//				global_mission_data.STATE,
+//				global_mission_data.ALTITUDE,
+//				global_mission_data.TEMPERATURE,
+//				global_mission_data.PRESSURE,
+//				global_mission_data.VOLTAGE,
+//				100.0,
+//				global_mission_data.GYRO_R,
+//				global_mission_data.GYRO_P,
+//				global_mission_data.GYRO_Y,
+//				global_mission_data.ACCEL_R,
+//				global_mission_data.ACCEL_P,
+//				global_mission_data.ACCEL_Y,
+//				global_mission_data.GPS_TIME,
+//				global_mission_data.GPS_ALTITUDE,
+//				global_mission_data.GPS_LATITUDE,
+//				global_mission_data.GPS_LONGITUDE,
+//				global_mission_data.GPS_SATS,
+//				global_mission_data.CMD_ECHO);
+
+		// fill the buffer with the formatted packet data
+		str_len = sprintf(telemetry_string, "%d,%s,%ld,%c,%s,%3.1f,%.1f,%.1f,%.1f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.1f,%.1f,%.1f,%d,%s,%.1f,%.4f,%.4f,%d,%s",
+						  global_mission_data.TEAM_ID,      			// team id (3174)
+						  mission_time, 								// mission time converted to a string
+						  global_mission_data.PACKET_COUNT, 			// packet count
+						  global_mission_data.MODE,         			// mode
+						  global_mission_data.STATE,        			// state
+						  global_mission_data.ALTITUDE,     			// calibrated altitude (m)
+						  global_mission_data.TEMPERATURE,  			// temperature (C)
+						  global_mission_data.PRESSURE,     			// pressure (kPa)
+						  global_mission_data.VOLTAGE,      			// battery voltage (V)
+						  global_mission_data.GYRO_R,					// gyro roll (degrees/s)
+						  global_mission_data.GYRO_P,					// gyro pitch (degrees/s)
+						  global_mission_data.GYRO_Y,					// gyro yaw (degrees/s)
+						  global_mission_data.ACCEL_R,					// accelerometer roll (degrees/s^2)
+						  global_mission_data.ACCEL_P,					// accelerometer pitch (degrees/s^2)
+						  global_mission_data.ACCEL_Y,					// accelerometer yaw (degrees/s^2)
+						  global_mission_data.MAG_R,					// magnetometer roll
+						  global_mission_data.MAG_P,					// magnetometer pitch
+						  global_mission_data.MAG_Y,					// magnetometer yaw
+						  global_mission_data.AUTO_GYRO_ROTATION_RATE,	// auto-gyro rotation rate (rps)
+						  global_mission_data.GPS_TIME,					// GPS time
+						  global_mission_data.GPS_ALTITUDE,				// GPS (absolute) altitude (m)
+						  global_mission_data.GPS_LATITUDE,				// GPS latitude
+						  global_mission_data.GPS_LONGITUDE,			// GPS longitude
+						  global_mission_data.GPS_SATS,					// # of connected GPS satellites
+						  global_mission_data.CMD_ECHO					// tracks previously received command
 		);
-		// send the second half of the packet over UART
+//		if (GPS_READY) {
+//			HAL_UART_Transmit(&huart3, receive_buffer, GPS_SIZE, HAL_MAX_DELAY);
+//			GPS_READY = 0;
+//		}
+		// Send the packet. The XBee will break this into 2 packets that need to be handled by the GCS
+		// (in other words, the GCS will *have* to receive 2 packets and combine them)
 		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
 
 		/*char test_string[30];
@@ -1694,13 +1690,18 @@ void StartSendTelemetry(void const * argument)
 		// increment packet count once the entire packet has been transmitted
 		global_mission_data.PACKET_COUNT = global_mission_data.PACKET_COUNT + 1;
 		// Since this is ~1/sec just add 1000 msec to mission time
+		// This could be a uint16 and just store it in seconds, but there isn't much of advantage to that
 		global_mission_data.MISSION_TIME = global_mission_data.MISSION_TIME + 1000;
 
 		osSemaphoreRelease(globalDataHandle);
 
+		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+		osDelay(100);
+		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+
 	  osDelay(1000);
 	  } else {
-		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 	  }
   } // END FOR LOOP
 
@@ -1778,6 +1779,9 @@ void StartReadCommands(void const * argument)
 	      // ST command -> set mission time
 	      else if (strncmp(rx_string, "CMD,3174,ST,", 12) == 0)
 	      {
+			  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+			  osDelay(500);
+			  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 	        // parse the timestamp to set to
 	        char arg[9];
 	        char *time_str = rx_string + 12;
@@ -1859,6 +1863,10 @@ void StartReadCommands(void const * argument)
 	      {
 	        // set global flag
 	        is_calibrated = 1;
+	        // Reset altitude_history array
+	        altitude_history[0] = 0.0;
+	        altitude_history[1] = 0.0;
+	        altitude_history[2] = 0.0;
 	        // set command echo
 	        char c_echo[] = "CAL";
 	        strcpy(global_mission_data.CMD_ECHO, c_echo);
@@ -1882,6 +1890,12 @@ void StartReadCommands(void const * argument)
 	        // set command echo
 	        char c_echo[] = "MECOFF";
 	        strcpy(global_mission_data.CMD_ECHO, c_echo);
+	      }
+	      else if (strncmp(rx_string, "CMD,3174,COLD", 13) == 0) {
+	    	  LC76G_cold_start();
+	    	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+	    	  osDelay(500);
+	    	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 	      }
 //	       FIXME : Probably don't need an ELSE statement
 	      else
@@ -1909,47 +1923,16 @@ void StartReadCommands(void const * argument)
 void StartGNC(void const * argument)
 {
   /* USER CODE BEGIN StartGNC */
-	osStatus stat = osErrorOS;
-	GGA_Data_t data;
   /* Infinite loop */
   for(;;)
   {
-	  // This IF statement should be all that is needed to parse GPS data.
-	  // Need to test though, apparently finding time to be outside to test it is harder than I thought.
-	  if (GPS_READY) {
-		  GPS_READY = 0;
-		  char output[200] = { '\0' };
-		  // The input should be a GNGGA message, but always check just in case
-		  if (strncmp(receive_buffer, "$GNGGA", 6) != 0) {
-			  // The message came from the wrong constellation
-			  memset(receive_buffer, 0, sizeof(receive_buffer));
-
-		  }
-		  // Parse the receive buffer for the GGA data.
-		  int ret = parse_gga(&receive_buffer, &data);
-		  time_to_string(data.time_ms, &data.gps_time);
-		  // sprintf and huart3 transmit for testing purposes only.
-//		  int strlen = sprintf(output, "GPS data:\nTime: [%s]\nLAT: [%0.4f]\tLON: [%0.4f]\tALT: [%0.4f]\n", data.gps_time, data.longitude, data.altitude);
-//		  HAL_UART_Transmit(&huart3, output, strlen, HAL_MAX_DELAY);
-
-		  // Now copy data into the global_data struct.
-		  stat = osSemaphoreWait(globalDataHandle, 100);
-		  if (stat != osOK) {
-			  osThreadYield();
-			  continue;
-		  }
-		  if (gps_time_enable) {
-			  global_mission_data.MISSION_TIME = data.time_ms;
-			  gps_time_enable = 0; // It is only *set* by the GPS
-		  }
-		  global_mission_data.GPS_ALTITUDE = data.altitude;
-		  global_mission_data.GPS_LATITUDE = data.latitude;
-		  global_mission_data.GPS_LONGITUDE = data.longitude;
-		  global_mission_data.GPS_SATS = data.num_satellites;
-		  strcpy(global_mission_data.GPS_TIME, data.gps_time);
-		  osSemaphoreRelease(globalDataHandle);
-		  memset(receive_buffer, 0, sizeof(receive_buffer));
-	  }
+	  // A lot of this code will be written by Tristan (in MATLAB probably) and we will just need to translate it.
+	  // The basics as I understand it is that we will take a couple seconds after PROBE_RELEASE to stabilize
+	  //   and calculate stuff like initial turn to make and what altitude to start making our move to drop
+	  //   the egg.
+	  // Once this is done we will have 2 control loops, Loiter and Egg Drop.
+	  // Loiter is as it sounds, make hot laps above the drop zone while descending.
+	  // Egg Drop will control the pathing into the drop zone and initiate egg release
 	  osThreadYield();
   }
 

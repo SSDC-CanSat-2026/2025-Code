@@ -4,42 +4,55 @@
 
 // Initialize global fields
 LC76G_gps_data gps_data;
+UART_HandleTypeDef* gps_huart;
 
-void LC76G_init(void)
+void LC76G_init(UART_HandleTypeDef* huart)
 {
-    HAL_UART_Transmit(&huart5, "$PAIR062,0,0*3E\r\n", 18, HAL_MAX_DELAY); // Disable GGA
+	gps_huart = huart;
+
+    HAL_UART_Transmit(gps_huart, "$PAIR062,0,0*3E\r\n", 18, HAL_MAX_DELAY); // Disable GGA
     HAL_Delay(100); // Use delays since we don't care about the ACK messages (PAIR001).
 
-    HAL_UART_Transmit(&huart5, "$PAIR062,1,0*3F\r\n", 18, HAL_MAX_DELAY); // Disable GLL
+    HAL_UART_Transmit(gps_huart, "$PAIR062,1,0*3F\r\n", 18, HAL_MAX_DELAY); // Disable GLL
     HAL_Delay(100);
 
-    HAL_UART_Transmit(&huart5, "$PAIR062,2,0*3C\r\n", 18, HAL_MAX_DELAY); // Disable GSA
+    HAL_UART_Transmit(gps_huart, "$PAIR062,2,0*3C\r\n", 18, HAL_MAX_DELAY); // Disable GSA
     HAL_Delay(100);
 
-    HAL_UART_Transmit(&huart5, "$PAIR062,3,0*3D\r\n", 18, HAL_MAX_DELAY); // Disable GSV
+    HAL_UART_Transmit(gps_huart, "$PAIR062,3,0*3D\r\n", 18, HAL_MAX_DELAY); // Disable GSV FIXME
     HAL_Delay(100);
 
-    HAL_UART_Transmit(&huart5, "$PAIR062,4,0*3A\r\n", 18, HAL_MAX_DELAY); // Disable RMC
+    HAL_UART_Transmit(gps_huart, "$PAIR062,4,0*3A\r\n", 18, HAL_MAX_DELAY); // Disable RMC
     HAL_Delay(100);
 
-    HAL_UART_Transmit(&huart5, "$PAIR062,5,0*3B\r\n", 18, HAL_MAX_DELAY); // Disable VTG
+    HAL_UART_Transmit(gps_huart, "$PAIR062,5,0*3B\r\n", 18, HAL_MAX_DELAY); // Disable VTG
     HAL_Delay(200);
 
-    HAL_UART_Transmit(&huart5, "$PAIR062,0,1*3F\r\n", 18, HAL_MAX_DELAY); // Enable GGA
+//    HAL_UART_Transmit(gps_huart, "$PAIR062,9,1,*1A\r\n", 18, HAL_MAX_DELAY);
+//    HAL_Delay(200);
+
+    HAL_UART_Transmit(gps_huart, "$PAIR062,0,1*3F\r\n", 18, HAL_MAX_DELAY); // Enable GGA
+    HAL_Delay(200);
 }
 
 // This was used when I was getting the GPS stuff to actually work.
 // No longer necessary but I will leave for reference or smth. - Joel
-void LC76G_test(UART_HandleTypeDef* huart) {
+void LC76G_test() {
 	char test_msg[] = "$PAIR865,0,0*31\r\n";
 //	char buf[256];
 //	uint8_t byte;
 
-	HAL_UART_Transmit(huart, &test_msg, sizeof(test_msg)-1, HAL_MAX_DELAY);
+	HAL_UART_Transmit(gps_huart, &test_msg, sizeof(test_msg)-1, HAL_MAX_DELAY);
 //	HAL_UART_Receive_IT(huart, &byte, 1);
 //	HAL_UART_Transmit(&huart5, LC76_ENABLE_GGA, strlen(LC76_ENABLE_GGA), TIMEOUT);
 //	HAL_UART_Receive(huart, &buf, 256, 0x8FF);
 //	HAL_UART_Transmit(&huart3, &buf, 256, HAL_MAX_DELAY);
+}
+
+void LC76G_cold_start() {
+	char msg[] = "$PAIR006*3C\r\n";
+
+	HAL_UART_Transmit(gps_huart, msg, sizeof(msg)-1, HAL_MAX_DELAY);
 }
 
 int parse_gga(char *sentence, GGA_Data_t *out)

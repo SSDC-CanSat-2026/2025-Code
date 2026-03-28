@@ -21,8 +21,17 @@ extern volatile uint8_t simulation_enable;
 extern volatile uint8_t gps_time_enable;
 extern volatile uint8_t is_calibrated; 
 extern volatile uint8_t mec_wire_enable;
+extern volatile uint8_t drop_egg_enable;
 extern volatile uint8_t simulation_pre;
-extern volatile double simulated_pressure;
+extern volatile double 	simulated_pressure;
+
+extern const	float	launch_altitude_threshold;
+extern const	float	release_height_percentage;
+extern const	float	release_height_tolerance;
+extern const	float	egg_drop_height;
+extern volatile float	max_altitude;
+extern volatile float 	altitude_history[3];
+
 
 //structs
 
@@ -39,13 +48,13 @@ typedef struct
 	float PRESSURE;
 	float VOLTAGE; // might change to int, can multiply by 10 and store as int
 
-	int16_t GYRO_R;
-	int16_t GYRO_P;
-	int16_t GYRO_Y;
+	float GYRO_R;
+	float GYRO_P;
+	float GYRO_Y;
 
-	int16_t ACCEL_R;
-	int16_t ACCEL_P;
-	int16_t ACCEL_Y;
+	float ACCEL_R;
+	float ACCEL_P;
+	float ACCEL_Y;
 
 	float MAG_R;
 	float MAG_P;

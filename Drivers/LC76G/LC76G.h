@@ -1,6 +1,7 @@
 #ifndef _LC76G_H_
 #define _LC76G_H_
 
+#include <stm32g491xx.h>
 #include "stm32g4xx_hal.h"
 #include "uart_interrupt.h"
 #include <stdlib.h>
