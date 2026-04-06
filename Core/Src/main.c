@@ -46,6 +46,7 @@
 /* USER CODE BEGIN PD */
 
 #define BUFFER_SIZE 128
+#define XBEE_MAX_PAYLOAD 80   // Safe value
 
 /* USER CODE END PD */
 
@@ -165,7 +166,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
     {
 		COMMAND_SIZE = size;
 		COMMAND_READY = 1;
-memcpy(command_buffer, dma_buffer, size);
+		memcpy(command_buffer, dma_buffer, size);
     }
   }
   else
@@ -258,6 +259,57 @@ int main(void)
   HAL_GPIO_WritePin(XBEE_RST_GPIO_Port, XBEE_RST_Pin, GPIO_PIN_SET);
   HAL_Delay(500);
 
+  // Change AP mode from AT to API w/out Escapes ---------------------------------------
+//  HAL_UART_Transmit(&huart3, "+++", 3, HAL_MAX_DELAY);
+//  char OK_buff[3];
+//  HAL_UART_Receive(&huart3, OK_buff, 3, 5000);
+//
+//  if (strncmp(OK_buff, "OK", 2) != 0) {
+//    if (strncmp(OK_buff, "ER", 2) == 0) {
+//  	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//  	  while(1);
+//  	}
+//
+//  	while(1) {
+//	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//	  HAL_Delay(400);
+//	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+//	  HAL_Delay(100);
+//	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//      HAL_Delay(200);
+//	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+//	  HAL_Delay(100);
+//  	}
+//  }
+////  HAL_Delay(1000);
+//
+//  HAL_UART_Transmit(&huart3, "ATAP 1\r", 7, HAL_MAX_DELAY);
+//  HAL_Delay(1000);
+//  HAL_UART_Transmit(&huart3, "ATAC\r", 5, HAL_MAX_DELAY);
+//  HAL_Delay(1000);
+//  HAL_UART_Transmit(&huart3, "ATWR\r", 5, HAL_MAX_DELAY);
+//  HAL_Delay(1000);
+//  HAL_UART_Transmit(&huart3, "ATCN\r", 5, HAL_MAX_DELAY);
+//  HAL_Delay(100);
+  // -----------------------------------------------------------------------------------
+
+  // Ensure ID parameter matches Team ID
+  uint8_t ATID[10] = {0x7E, 0x00, 0x06, 0x08, 0x01, 0x49, 0x44, 0x31, 0x74, 0xC4};
+  uint8_t resp[9];
+  HAL_UART_Transmit(&huart3, ATID, sizeof(ATID), HAL_MAX_DELAY);
+  HAL_UART_Receive(&huart3, resp, sizeof(resp), 5000);
+  if (resp[0] != 0x7E || resp[8] != 0xE9) {
+	  	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+	  	  HAL_Delay(400);
+	  	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+	  	  HAL_Delay(100);
+	  	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+	        HAL_Delay(200);
+	  	  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+	  	  HAL_Delay(100);
+  }
+  HAL_Delay(1000);
+
   // Hold GPS in reset (LOW)
   HAL_GPIO_WritePin(GPS_RST_GPIO_Port, GPS_RST_Pin, GPIO_PIN_RESET);
   HAL_Delay(100);
@@ -309,8 +361,9 @@ int main(void)
 
   // Flash LED to signal INITs are done
   HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-  HAL_Delay(300);
+  HAL_Delay(500);
   HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+  HAL_Delay(200);
 
   // UART 5
   // Check if ORE flag is set, which can happen if data is present on UART RX line
@@ -330,7 +383,6 @@ int main(void)
   HAL_UARTEx_ReceiveToIdle_DMA(&huart3, dma_buffer, BUFFER_SIZE); // receive until idle, then trigger interrupt
   __HAL_DMA_DISABLE_IT(huart3.hdmarx, DMA_IT_HT); // Disables "Half Transfer" interrupt
 
-//  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -343,15 +395,15 @@ int main(void)
   globalDataHandle = osSemaphoreCreate(osSemaphore(globalData), 1);
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
-//  /* add semaphores, ... */
+  /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
-//  /* start timers, add new ones, ... */
+  /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
-//  /* add queues, ... */
+  /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -386,7 +438,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+	  HAL_GPIO_TogglePin(USR_LED_GPIO_Port, USR_LED_Pin);
+	  HAL_Delay(100);
     /* USER CODE BEGIN 3 */
 
   }
@@ -1449,6 +1502,81 @@ void determineState(double altitude){
     }
 }
 
+void send_api_frame(uint8_t *payload, uint16_t payload_len, uint8_t frame_id)
+{
+    uint8_t frame[128];
+    uint16_t i = 0;
+
+    // Start delimiter
+    frame[i++] = 0x7E;
+
+    // Length placeholder
+    frame[i++] = 0x00;
+    frame[i++] = 0x00;
+
+    uint16_t start = i;
+
+    // Frame type
+    frame[i++] = 0x10;
+
+    // Frame ID
+    frame[i++] = frame_id;
+
+    // 64-bit dest (broadcast)
+    frame[i++] = 0x00;
+    frame[i++] = 0x00;
+    frame[i++] = 0x00;
+    frame[i++] = 0x00;
+    frame[i++] = 0x00;
+    frame[i++] = 0x00;
+    frame[i++] = 0xFF;
+    frame[i++] = 0xFF;
+
+    // 16-bit addr
+    frame[i++] = 0xFF;
+    frame[i++] = 0xFE;
+
+    // Radius + options
+    frame[i++] = 0x00;
+    frame[i++] = 0x00;
+
+    // Payload
+    memcpy(&frame[i], payload, payload_len);
+    i += payload_len;
+
+    // Length
+    uint16_t length = i - start;
+    frame[1] = (length >> 8) & 0xFF;
+    frame[2] = length & 0xFF;
+
+    // Checksum
+    uint8_t sum = 0;
+    for (uint16_t j = start; j < i; j++)
+        sum += frame[j];
+
+    frame[i++] = 0xFF - sum;
+
+    HAL_UART_Transmit(&huart3, frame, i, HAL_MAX_DELAY);
+}
+
+void send_packet(uint8_t *data, uint16_t len)
+{
+    uint16_t offset = 0;
+    uint8_t frame_id = 1;
+
+    while (offset < len)
+    {
+        uint16_t chunk_len = len - offset;
+
+        if (chunk_len > XBEE_MAX_PAYLOAD)
+            chunk_len = XBEE_MAX_PAYLOAD;
+
+        send_api_frame(&data[offset], chunk_len, 0);
+
+        offset += chunk_len;
+    }
+}
+
 /* -------------------------------------------------------------------------------------------------------------------------------------------------------- */
 /*                                                                 START THREAD DEFINITIONS                                                                 */
 /* -------------------------------------------------------------------------------------------------------------------------------------------------------- */
@@ -1561,6 +1689,7 @@ void StartReadSensors(void const * argument)
 		  char output[200] = { '\0' };
 		  // The input should be a GNGGA message, but will be checked in parser function
 		  // Parse the receive buffer for the GGA data.
+//		  HAL_UART_Transmit(&huart3, receive_buffer, GPS_SIZE, HAL_MAX_DELAY);
 		  int ret = parse_gga(&receive_buffer, &gps_data);
 		  time_to_string(gps_data.time_ms, &gps_data.gps_time);
 
@@ -1603,6 +1732,10 @@ void StartSendTelemetry(void const * argument)
   {
 	  if (telemetry_enable)
 	  {
+		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+		osDelay(100);
+		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+//		HAL_GPIO_TogglePin(USR_LED_GPIO_Port, USR_LED_Pin);
 //		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
 		stat = osSemaphoreWait(globalDataHandle, 100);
 		if (stat != osOK) {
@@ -1675,12 +1808,9 @@ void StartSendTelemetry(void const * argument)
 						  global_mission_data.GPS_SATS,					// # of connected GPS satellites
 						  global_mission_data.CMD_ECHO					// tracks previously received command
 		);
-//		if (GPS_READY) {
-//			HAL_UART_Transmit(&huart3, receive_buffer, GPS_SIZE, HAL_MAX_DELAY);
-//			GPS_READY = 0;
-//		}
 		// Send the packet. The XBee will break this into 2 packets that need to be handled by the GCS
 		// (in other words, the GCS will *have* to receive 2 packets and combine them)
+//		send_packet((uint8_t*)telemetry_string, str_len);
 		HAL_UART_Transmit(&huart3, telemetry_string, str_len, HAL_MAX_DELAY);
 
 		/*char test_string[30];
@@ -1695,13 +1825,13 @@ void StartSendTelemetry(void const * argument)
 
 		osSemaphoreRelease(globalDataHandle);
 
-		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-		osDelay(100);
-		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+//		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
+//		osDelay(100);
+//		HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 
-	  osDelay(1000);
+		osDelay(1000);
 	  } else {
-//		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
+		  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 	  }
   } // END FOR LOOP
 
@@ -1779,9 +1909,6 @@ void StartReadCommands(void const * argument)
 	      // ST command -> set mission time
 	      else if (strncmp(rx_string, "CMD,3174,ST,", 12) == 0)
 	      {
-			  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_RESET);
-			  osDelay(500);
-			  HAL_GPIO_WritePin(USR_LED_GPIO_Port, USR_LED_Pin, GPIO_PIN_SET);
 	        // parse the timestamp to set to
 	        char arg[9];
 	        char *time_str = rx_string + 12;
@@ -1900,6 +2027,7 @@ void StartReadCommands(void const * argument)
 //	       FIXME : Probably don't need an ELSE statement
 	      else
 	      {
+//	    	  send_packet(rx_string, 22);
 	    	  // Probably don't want to keep this in final version, but good for testing
 	    	  strcpy(global_mission_data.CMD_ECHO,"INVALID");
 	      }

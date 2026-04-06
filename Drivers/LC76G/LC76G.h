@@ -49,7 +49,7 @@ extern LC76G_gps_data gps_data;
 typedef struct
 {
 	uint32_t time_ms;   // milliseconds since midnight
-	char gps_time[8];
+	char gps_time[9];
     uint8_t fix_quality;
     uint8_t num_satellites;
     float hdop;
